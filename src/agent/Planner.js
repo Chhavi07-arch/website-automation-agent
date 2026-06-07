@@ -60,6 +60,8 @@ export class Planner {
 
     const GOAL_MAP = {
       [ACTION_TYPES.GOALS.FILL_SHADCN_FORM]: () => this._planFillShadcnForm(params),
+      [ACTION_TYPES.GOALS.SEARCH_GOOGLE]:    () => this._planSearchGoogle(params),
+      [ACTION_TYPES.GOALS.SEARCH_GITHUB]:    () => this._planSearchGitHub(params),
     };
 
     const planFn = GOAL_MAP[goalKey];
@@ -131,6 +133,58 @@ export class Planner {
 
       // --- Final evidence screenshot ---
       { type: ACTION_TYPES.SCREENSHOT,    label: 'after-form-fill' },
+    ];
+  }
+
+  /**
+   * Skeleton plan: navigate to Google and search for a query.
+   *
+   * Status: stub — steps are defined and logged, but SearchGoogleWorkflow
+   *   does not yet call executeAll(). Promote to full implementation in Phase 2.
+   *
+   * @param {object} params
+   * @param {string} params.query - The search term.
+   * @returns {object[]}
+   */
+  _planSearchGoogle({ query }) {
+    if (!query) throw new Error('Planner: SEARCH_GOOGLE requires params.query');
+
+    return [
+      { type: ACTION_TYPES.NAVIGATE,      url: 'https://www.google.com' },
+      { type: ACTION_TYPES.SCREENSHOT,    label: 'google-loaded' },
+      { type: ACTION_TYPES.WAIT_FOR_IDLE },
+      { type: ACTION_TYPES.DETECT_FIELD,  field: 'search' },
+      { type: ACTION_TYPES.CLICK,         field: 'search' },
+      { type: ACTION_TYPES.FILL,          field: 'search', value: query },
+      { type: ACTION_TYPES.SEND_KEYS,     field: 'search', value: 'Enter' },
+      { type: ACTION_TYPES.WAIT_FOR_IDLE },
+      { type: ACTION_TYPES.SCREENSHOT,    label: 'google-results' },
+    ];
+  }
+
+  /**
+   * Skeleton plan: navigate to GitHub and search for a query.
+   *
+   * Status: stub — steps are defined and logged, but SearchGitHubWorkflow
+   *   does not yet call executeAll(). Promote to full implementation in Phase 2.
+   *
+   * @param {object} params
+   * @param {string} params.query - The search term.
+   * @returns {object[]}
+   */
+  _planSearchGitHub({ query }) {
+    if (!query) throw new Error('Planner: SEARCH_GITHUB requires params.query');
+
+    return [
+      { type: ACTION_TYPES.NAVIGATE,      url: 'https://github.com' },
+      { type: ACTION_TYPES.SCREENSHOT,    label: 'github-loaded' },
+      { type: ACTION_TYPES.WAIT_FOR_IDLE },
+      { type: ACTION_TYPES.DETECT_FIELD,  field: 'search' },
+      { type: ACTION_TYPES.CLICK,         field: 'search' },
+      { type: ACTION_TYPES.FILL,          field: 'search', value: query },
+      { type: ACTION_TYPES.SEND_KEYS,     field: 'search', value: 'Enter' },
+      { type: ACTION_TYPES.WAIT_FOR_IDLE },
+      { type: ACTION_TYPES.SCREENSHOT,    label: 'github-results' },
     ];
   }
 

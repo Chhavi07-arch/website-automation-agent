@@ -73,8 +73,13 @@ export const ACTION_TYPES = {
   SCREENSHOT:     'SCREENSHOT',
   WAIT:           'WAIT',            // sleep for N ms
 
-  /** Named goal identifiers passed to Planner.generatePlan(). */
+  /**
+   * Named goal identifiers passed to GoalRouter.route() and Planner.generatePlan().
+   * Add new goals here when introducing new workflows.
+   */
   GOALS: {
-    FILL_SHADCN_FORM: 'FILL_SHADCN_FORM',
+    FILL_SHADCN_FORM: 'FILL_SHADCN_FORM',  // fill the shadcn React Hook Form demo
+    SEARCH_GOOGLE:    'SEARCH_GOOGLE',      // navigate to Google and search for a query
+    SEARCH_GITHUB:    'SEARCH_GITHUB',      // navigate to GitHub and search for a query
   },
 };

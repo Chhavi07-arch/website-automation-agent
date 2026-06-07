@@ -1,26 +1,26 @@
 /**
  * Agent.js
  *
- * Central orchestrator implementing the OTAV (Observe → Think → Act → Verify)
- * loop.  In V2 it also owns the Planner, which sits between a Workflow's goal
- * declaration and the ActionExecutor's dispatch.
+ * Central orchestrator implementing the OTAV loop.  In V3 it also owns the
+ * GoalRouter, which maps goal keys to workflow classes and instantiates them.
  *
- * Architecture (V2):
- *   Workflow → agent.generatePlan(goal, params)
- *            → Planner  → action[]
+ * Architecture (V3):
+ *   index.js → agent.router.route(goalKey)
+ *            → GoalRouter selects WorkflowClass
+ *            → workflow.run()
+ *            → agent.generatePlan(goal, params)
+ *            → Planner → action[]
  *            → agent.executor.executeAll(plan)
  *            → ActionExecutor → Tools → Playwright
  *
- * Design philosophy:
- *   - Agent owns every component; Workflows hold only an Agent reference.
- *   - No page-specific or task-specific logic lives here.
- *   - Future AI integration (Phase 4) will replace Planner.generatePlan() with
- *     an LLM call — the Agent interface does not change.
+ * Agent is the composition root — it imports every workflow class and registers
+ * them with GoalRouter.  Adding a new workflow = one import + one register().
  *
  * Usage:
  *   const agent = new Agent();
  *   await agent.initialize();
- *   await new FillShadcnFormWorkflow(agent).run();
+ *   const workflow = agent.router.route(config.target.goal);
+ *   await workflow.run();
  *   await agent.shutdown();
  */
 
@@ -35,6 +35,11 @@ import { FormDetectionService }    from '../services/FormDetectionService.js';
 import { ValidationService }       from '../services/ValidationService.js';
 import { ActionExecutor }          from './ActionExecutor.js';
 import { Planner }                 from './Planner.js';
+import { GoalRouter }              from './GoalRouter.js';
+import { FillShadcnFormWorkflow }  from '../workflows/FillShadcnFormWorkflow.js';
+import { SearchGoogleWorkflow }    from '../workflows/SearchGoogleWorkflow.js';
+import { SearchGitHubWorkflow }    from '../workflows/SearchGitHubWorkflow.js';
+import { ACTION_TYPES }            from '../config/constants.js';
 import logger                      from '../utils/logger.js';
 
 export class Agent {
@@ -51,6 +56,9 @@ export class Agent {
     /** @type {ElementDetectionService|null} */ this.elementDetection = null;
     /** @type {FormDetectionService|null} */   this.formDetection    = null;
     /** @type {ValidationService|null} */      this.validation       = null;
+
+    // --- Routing layer (V3) ---
+    /** @type {GoalRouter|null} */     this.router   = null;
 
     // --- Planning layer ---
     /** @type {Planner|null} */        this.planner  = null;
@@ -95,7 +103,16 @@ export class Agent {
     // Wire planner (translates goals into action arrays for the executor)
     this.planner  = new Planner(this);
 
-    logger.info('Agent ready — all tools, services, and planner initialised');
+    // Wire router (maps goal keys to workflow classes) — Agent is the composition root
+    this.router = new GoalRouter(this)
+      .register(ACTION_TYPES.GOALS.FILL_SHADCN_FORM, FillShadcnFormWorkflow)
+      .register(ACTION_TYPES.GOALS.SEARCH_GOOGLE,    SearchGoogleWorkflow)
+      .register(ACTION_TYPES.GOALS.SEARCH_GITHUB,    SearchGitHubWorkflow);
+
+    logger.info(
+      `Agent ready — router knows ${this.router.listGoals().length} goals: ` +
+      `[${this.router.listGoals().join(', ')}]`,
+    );
   }
 
   /**

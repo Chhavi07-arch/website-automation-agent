@@ -64,8 +64,20 @@ const config = {
   },
 
   target: {
-    /** The URL the agent will navigate to */
+    /** The URL the agent will navigate to (used by FILL_SHADCN_FORM) */
     url: process.env.TARGET_URL || 'https://ui.shadcn.com/docs/forms/react-hook-form',
+    /**
+     * Which goal to run.  Must match one of ACTION_TYPES.GOALS.
+     * Defaults to FILL_SHADCN_FORM for backward compatibility.
+     */
+    goal: process.env.GOAL || 'FILL_SHADCN_FORM',
+  },
+
+  search: {
+    /** Query string used by SearchGoogleWorkflow */
+    googleQuery: process.env.GOOGLE_QUERY || 'Playwright browser automation',
+    /** Query string used by SearchGitHubWorkflow */
+    githubQuery: process.env.GITHUB_QUERY || 'playwright',
   },
 
   logging: {
