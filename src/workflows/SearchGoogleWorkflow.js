@@ -1,25 +1,15 @@
 /**
  * SearchGoogleWorkflow.js
  *
- * Skeleton workflow for the SEARCH_GOOGLE goal.
+ * Full implementation: navigate to Google, detect the search box dynamically,
+ * type a query, submit, and verify the results page loaded.
  *
- * Current state: skeleton — demonstrates the extension pattern.
- *   - Registers cleanly with GoalRouter (no changes to any existing file needed).
- *   - Calls Planner.generatePlan() so the full action plan is logged in bold
- *     yellow before anything else happens.
- *   - Skips ActionExecutor.executeAll() (logged as a warning) so no real
- *     browser actions are taken until the implementation is complete.
+ * Detection strategy:
+ *   Google's search box has name="q" on all locales.
+ *   FormDetectionService finds it via the 'q' entry in SEARCH_FIELD_HINTS,
+ *   so no locale-specific selectors are hardcoded here.
  *
- * To fully implement this workflow:
- *   1. Complete _planSearchGoogle() in Planner.js (already stubbed).
- *   2. Remove the dry-run guard and call agent.executor.executeAll(plan).
- *   3. Add any Google-specific element detection hints to constants.js if needed.
- *
- * Architecture note:
- *   This file was added without modifying any existing workflow, tool, service,
- *   or the ActionExecutor.  Only two lines changed elsewhere:
- *     - One import + one .register() call in Agent.initialize().
- *   That is the extension point the GoalRouter was designed to enable.
+ * Follows the full Workflow → Planner → ActionExecutor → Tools chain.
  */
 
 import { ACTION_TYPES } from '../config/constants.js';
@@ -35,44 +25,23 @@ export class SearchGoogleWorkflow {
   }
 
   /**
-   * Entry point called by the agent runner.
-   *
    * @returns {Promise<void>}
    */
   async run() {
     const agent = this._agent;
-    logger.info('--- SearchGoogleWorkflow starting (SKELETON) ---');
+    logger.info('--- SearchGoogleWorkflow starting ---');
 
-    // -------------------------------------------------------------------------
-    // 1. Ask the Planner what the action sequence looks like.
-    //    Even in skeleton mode this produces a fully-logged plan, showing the
-    //    agent's intent before any browser action is taken.
-    // -------------------------------------------------------------------------
-    agent.think('Requesting plan from Planner for SEARCH_GOOGLE (dry-run)');
+    // 1. Ask the Planner for the full action sequence.
+    agent.think(`Planning Google search for: "${config.search.googleQuery}"`);
     const plan = agent.generatePlan(ACTION_TYPES.GOALS.SEARCH_GOOGLE, {
       query: config.search.googleQuery,
     });
 
-    agent.observe(
-      `Plan ready (${plan.length} steps) — skipping execution (skeleton mode)`,
-    );
+    // 2. Execute every step through ActionExecutor.
+    agent.act(`Executing ${plan.length}-step Google search plan`);
+    await agent.executor.executeAll(plan);
 
-    // -------------------------------------------------------------------------
-    // 2. Execution gate — remove this block and add executeAll() when ready.
-    // -------------------------------------------------------------------------
-    logger.warn(
-      'SearchGoogleWorkflow: SKELETON — plan was generated and logged above ' +
-      'but will not be executed until this workflow is fully implemented.',
-    );
-
-    /*
-     * Full implementation (Phase 2):
-     *
-     *   agent.act(`Executing ${plan.length}-step Google search plan`);
-     *   await agent.executor.executeAll(plan);
-     *   agent.verify('Google search plan completed');
-     */
-
+    agent.verify('Google search workflow complete');
     logger.info('--- SearchGoogleWorkflow finished ---');
   }
 }

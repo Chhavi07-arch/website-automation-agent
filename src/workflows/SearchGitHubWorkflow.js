@@ -1,25 +1,18 @@
 /**
  * SearchGitHubWorkflow.js
  *
- * Skeleton workflow for the SEARCH_GITHUB goal.
+ * Full implementation: navigate to GitHub, open the search dialog via the '/'
+ * keyboard shortcut, detect the search input dynamically, type a query, submit,
+ * and verify the results page loaded.
  *
- * Current state: skeleton — demonstrates the extension pattern.
- *   - Registers cleanly with GoalRouter (no changes to any existing file).
- *   - Calls Planner.generatePlan() so the full action plan is logged in bold
- *     yellow before anything else happens.
- *   - Skips ActionExecutor.executeAll() (logged as a warning) so no real
- *     browser actions are taken until the implementation is complete.
+ * URL strategy:
+ *   Navigates to https://github.com/search instead of the GitHub homepage.
+ *   The homepage exposes search as a <button aria-haspopup="dialog"> —
+ *   not a text input — causing getByLabel(/search/i) to resolve to the button,
+ *   which cannot be filled.  The /search page has a standard <input name="q">
+ *   that the 'q' entry in SEARCH_FIELD_HINTS detects reliably on all locales.
  *
- * To fully implement this workflow:
- *   1. Complete _planSearchGitHub() in Planner.js (already stubbed).
- *   2. Remove the dry-run guard and call agent.executor.executeAll(plan).
- *   3. Add GitHub-specific element detection hints (search box selector, etc.)
- *      to constants.js if the generic label/aria detection is insufficient.
- *
- * Architecture note:
- *   Like SearchGoogleWorkflow, this file was added without modifying any
- *   existing workflow, tool, service, or the ActionExecutor.  The only other
- *   change was one import + one .register() call in Agent.initialize().
+ * Follows the full Workflow → Planner → ActionExecutor → Tools chain.
  */
 
 import { ACTION_TYPES } from '../config/constants.js';
@@ -35,42 +28,23 @@ export class SearchGitHubWorkflow {
   }
 
   /**
-   * Entry point called by the agent runner.
-   *
    * @returns {Promise<void>}
    */
   async run() {
     const agent = this._agent;
-    logger.info('--- SearchGitHubWorkflow starting (SKELETON) ---');
+    logger.info('--- SearchGitHubWorkflow starting ---');
 
-    // -------------------------------------------------------------------------
-    // 1. Generate and log the full action plan.
-    // -------------------------------------------------------------------------
-    agent.think('Requesting plan from Planner for SEARCH_GITHUB (dry-run)');
+    // 1. Ask the Planner for the full action sequence.
+    agent.think(`Planning GitHub search for: "${config.search.githubQuery}"`);
     const plan = agent.generatePlan(ACTION_TYPES.GOALS.SEARCH_GITHUB, {
       query: config.search.githubQuery,
     });
 
-    agent.observe(
-      `Plan ready (${plan.length} steps) — skipping execution (skeleton mode)`,
-    );
+    // 2. Execute every step through ActionExecutor.
+    agent.act(`Executing ${plan.length}-step GitHub search plan`);
+    await agent.executor.executeAll(plan);
 
-    // -------------------------------------------------------------------------
-    // 2. Execution gate — remove this block and add executeAll() when ready.
-    // -------------------------------------------------------------------------
-    logger.warn(
-      'SearchGitHubWorkflow: SKELETON — plan was generated and logged above ' +
-      'but will not be executed until this workflow is fully implemented.',
-    );
-
-    /*
-     * Full implementation (Phase 2):
-     *
-     *   agent.act(`Executing ${plan.length}-step GitHub search plan`);
-     *   await agent.executor.executeAll(plan);
-     *   agent.verify('GitHub search plan completed');
-     */
-
+    agent.verify('GitHub search workflow complete');
     logger.info('--- SearchGitHubWorkflow finished ---');
   }
 }

@@ -16,7 +16,7 @@
  */
 
 import { ElementDetectionService } from './ElementDetectionService.js';
-import { NAME_FIELD_HINTS, DESCRIPTION_FIELD_HINTS } from '../config/constants.js';
+import { NAME_FIELD_HINTS, DESCRIPTION_FIELD_HINTS, SEARCH_FIELD_HINTS } from '../config/constants.js';
 import logger from '../utils/logger.js';
 
 export class FormDetectionService {
@@ -70,9 +70,32 @@ export class FormDetectionService {
       }
     }
 
-    // --- Strategy 3: fall back to scanning all visible inputs ---
-    if (!fields.name || !fields.description) {
-      logger.think('Falling back to full-page input scan');
+    // --- Strategy 3: resolve search field via known search hints ---
+    for (const hint of SEARCH_FIELD_HINTS) {
+      const locator = await this._detector.findElement({
+        label:       hint,
+        placeholder: hint,
+        name:        hint,
+      });
+      if (locator) {
+        logger.think(`Identified "search" field via hint: "${hint}"`);
+        fields.search = locator;
+        break;
+      }
+    }
+
+    // --- Strategy 3b: ARIA searchbox role (Google, custom search inputs) ---
+    if (!fields.search) {
+      const locator = await this._detector.findByRole('searchbox');
+      if (locator) {
+        logger.think('Identified "search" field via ARIA searchbox role');
+        fields.search = locator;
+      }
+    }
+
+    // --- Strategy 4: fall back to scanning all visible inputs ---
+    if (!fields.name || !fields.description || !fields.search) {
+      logger.think('Falling back to full-page input scan for remaining unclassified fields');
       const inputs = this._page.locator('input:visible, textarea:visible');
       const count = await inputs.count();
       logger.observe(`Found ${count} visible input/textarea elements`);
@@ -80,25 +103,27 @@ export class FormDetectionService {
       for (let i = 0; i < count; i++) {
         const el = inputs.nth(i);
 
-        // Try to read accessible metadata to classify the field
-        const ariaLabel  = await el.getAttribute('aria-label') || '';
-        const placeholder = await el.getAttribute('placeholder') || '';
-        const nameAttr   = await el.getAttribute('name') || '';
-        const id         = await el.getAttribute('id') || '';
+        // Collect accessible metadata for classification
+        const ariaLabel   = await el.getAttribute('aria-label')   || '';
+        const placeholder = await el.getAttribute('placeholder')  || '';
+        const nameAttr    = await el.getAttribute('name')         || '';
+        const id          = await el.getAttribute('id')           || '';
+        const type        = await el.getAttribute('type')         || 'text';
 
-        // Build a combined string to match against our hint lists
         const combined = [ariaLabel, placeholder, nameAttr, id]
           .join(' ')
           .toLowerCase();
 
-        if (!fields.name && NAME_FIELD_HINTS.some((h) => combined.includes(h))) {
+        if (!fields.search && (type === 'search' || SEARCH_FIELD_HINTS.some((h) => combined.includes(h)))) {
+          logger.think(`Classified input[${i}] as "search" via metadata scan`);
+          fields.search = el;
+        } else if (!fields.name && NAME_FIELD_HINTS.some((h) => combined.includes(h))) {
           logger.think(`Classified input[${i}] as "name" via metadata scan`);
           fields.name = el;
         } else if (!fields.description && DESCRIPTION_FIELD_HINTS.some((h) => combined.includes(h))) {
           logger.think(`Classified input[${i}] as "description" via metadata scan`);
           fields.description = el;
-        } else if (!fields.name && !fields.description) {
-          // Assign positionally as a last resort (first=name, second=description)
+        } else if (!fields.name && !fields.description && !fields.search) {
           const key = `unknown_${i}`;
           logger.think(`Could not classify input[${i}]; storing as "${key}"`);
           fields[key] = el;

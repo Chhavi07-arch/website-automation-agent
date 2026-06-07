@@ -137,10 +137,11 @@ export class Planner {
   }
 
   /**
-   * Skeleton plan: navigate to Google and search for a query.
+   * Plan: navigate to Google and search for a query.
    *
-   * Status: stub — steps are defined and logged, but SearchGoogleWorkflow
-   *   does not yet call executeAll(). Promote to full implementation in Phase 2.
+   * Detection strategy:
+   *   Google's search box has name="q" on all locales.
+   *   FormDetectionService will find it via the 'q' entry in SEARCH_FIELD_HINTS.
    *
    * @param {object} params
    * @param {string} params.query - The search term.
@@ -150,23 +151,39 @@ export class Planner {
     if (!query) throw new Error('Planner: SEARCH_GOOGLE requires params.query');
 
     return [
+      // --- Load Google homepage ---
       { type: ACTION_TYPES.NAVIGATE,      url: 'https://www.google.com' },
       { type: ACTION_TYPES.SCREENSHOT,    label: 'google-loaded' },
       { type: ACTION_TYPES.WAIT_FOR_IDLE },
+
+      // --- Find and fill the search box ---
       { type: ACTION_TYPES.DETECT_FIELD,  field: 'search' },
       { type: ACTION_TYPES.CLICK,         field: 'search' },
       { type: ACTION_TYPES.FILL,          field: 'search', value: query },
-      { type: ACTION_TYPES.SEND_KEYS,     field: 'search', value: 'Enter' },
+      { type: ACTION_TYPES.SCREENSHOT,    label: 'google-query-typed' },
+
+      // --- Submit and wait for results page ---
+      { type: ACTION_TYPES.PRESS_KEY,     key: 'Enter' },
+      { type: ACTION_TYPES.WAIT,          ms: 1000 },   // let navigation start
       { type: ACTION_TYPES.WAIT_FOR_IDLE },
       { type: ACTION_TYPES.SCREENSHOT,    label: 'google-results' },
+      { type: ACTION_TYPES.VERIFY_URL,    fragment: 'google.com/search' },
     ];
   }
 
   /**
-   * Skeleton plan: navigate to GitHub and search for a query.
+   * Plan: navigate to GitHub and search for a query.
    *
-   * Status: stub — steps are defined and logged, but SearchGitHubWorkflow
-   *   does not yet call executeAll(). Promote to full implementation in Phase 2.
+   * URL strategy:
+   *   We navigate to https://github.com/search rather than the homepage.
+   *   GitHub's homepage exposes search as a <button aria-haspopup="dialog">
+   *   — not a text input — so getByLabel(/search/i) resolves to the button,
+   *   which cannot be filled.  The /search page has a standard <input name="q">
+   *   that our 'q' hint in SEARCH_FIELD_HINTS detects correctly on all locales.
+   *
+   * Detection strategy:
+   *   The search input has name="q" → matches 'q' entry in SEARCH_FIELD_HINTS
+   *   via ElementDetectionService.findByName('q').
    *
    * @param {object} params
    * @param {string} params.query - The search term.
@@ -176,15 +193,23 @@ export class Planner {
     if (!query) throw new Error('Planner: SEARCH_GITHUB requires params.query');
 
     return [
-      { type: ACTION_TYPES.NAVIGATE,      url: 'https://github.com' },
-      { type: ACTION_TYPES.SCREENSHOT,    label: 'github-loaded' },
+      // --- Navigate directly to GitHub's search page (has a real text input) ---
+      { type: ACTION_TYPES.NAVIGATE,      url: 'https://github.com/search' },
+      { type: ACTION_TYPES.SCREENSHOT,    label: 'github-search-page' },
       { type: ACTION_TYPES.WAIT_FOR_IDLE },
+
+      // --- Detect the search input (name="q") and fill it ---
       { type: ACTION_TYPES.DETECT_FIELD,  field: 'search' },
       { type: ACTION_TYPES.CLICK,         field: 'search' },
       { type: ACTION_TYPES.FILL,          field: 'search', value: query },
-      { type: ACTION_TYPES.SEND_KEYS,     field: 'search', value: 'Enter' },
+      { type: ACTION_TYPES.SCREENSHOT,    label: 'github-query-typed' },
+
+      // --- Submit and wait for results page ---
+      { type: ACTION_TYPES.PRESS_KEY,     key: 'Enter' },
+      { type: ACTION_TYPES.WAIT,          ms: 1500 },
       { type: ACTION_TYPES.WAIT_FOR_IDLE },
       { type: ACTION_TYPES.SCREENSHOT,    label: 'github-results' },
+      { type: ACTION_TYPES.VERIFY_URL,    fragment: 'github.com/search' },
     ];
   }
 
@@ -223,6 +248,10 @@ export class Planner {
         return `Send keys to "${step.field}" → "${step.value}"`;
       case ACTION_TYPES.DOUBLE_CLICK:
         return `Double-click "${step.field || '(locator)'}"`;
+      case ACTION_TYPES.PRESS_KEY:
+        return `Press key [${step.key}]`;
+      case ACTION_TYPES.VERIFY_URL:
+        return `Verify URL contains "${step.fragment}"`;
       default:
         return step.type;
     }

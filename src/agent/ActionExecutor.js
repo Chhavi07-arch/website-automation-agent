@@ -107,6 +107,18 @@ export class ActionExecutor {
         }
         return this._agent.scroll.scrollDown(action.pixels);
 
+      // --- Page-level keyboard ---
+      case ACTION_TYPES.PRESS_KEY:
+        // Fires a keyboard event at the page level (not on a specific element).
+        // Use for shortcuts like '/' (open GitHub search) or 'Enter' (submit).
+        return this._agent.input.pressKey(action.key);
+
+      // --- URL verification ---
+      case ACTION_TYPES.VERIFY_URL:
+        // Checks the current URL contains the expected fragment.
+        // Logs a warning but does not throw on mismatch — consistent with VERIFY_FIELD.
+        return this._agent.validation.urlContains(action.fragment);
+
       // --- Utilities ---
       case ACTION_TYPES.SCREENSHOT:
         return this._agent.screenshot.capture(action.label || '');
@@ -133,7 +145,11 @@ export class ActionExecutor {
 
     for (let i = 0; i < total; i++) {
       const action = actions[i];
-      logger.plan(`[${i + 1}/${total}] ${action.type}${action.field ? ` → "${action.field}"` : ''}`);
+      const detail = action.field ? ` → "${action.field}"`
+                   : action.key   ? ` [${action.key}]`
+                   : action.fragment ? ` ≈ "${action.fragment}"`
+                   : '';
+      logger.plan(`[${i + 1}/${total}] ${action.type}${detail}`);
       results.push(await this.execute(action));
     }
 

@@ -48,6 +48,16 @@ export const NAME_FIELD_HINTS = ['name', 'username', 'full name', 'fullname', 'f
 /** Names (lowercased) that identify a "description" form field. */
 export const DESCRIPTION_FIELD_HINTS = ['description', 'bio', 'about', 'details', 'summary'];
 
+/**
+ * Names / attributes that identify a search box.
+ * Ordered by reliability across different sites:
+ *   'search' — matches aria-label "Search", "Search GitHub", etc.
+ *   'q'      — the standard query-string name used by Google, Bing, DDG, etc.
+ *   'query'  — common alternative name attribute
+ *   'find'   — used by some internal search forms
+ */
+export const SEARCH_FIELD_HINTS = ['search', 'q', 'query', 'find'];
+
 /** Action type strings dispatched through ActionExecutor. */
 export const ACTION_TYPES = {
   // Navigation
@@ -68,6 +78,10 @@ export const ACTION_TYPES = {
   // Intelligence (Planner-specific)
   DETECT_FIELD:   'DETECT_FIELD',    // resolve a named field → locator, cache in registry
   VERIFY_FIELD:   'VERIFY_FIELD',    // assert a field's current value equals expected
+  VERIFY_URL:     'VERIFY_URL',      // assert current URL contains a fragment
+
+  // Keyboard
+  PRESS_KEY:      'PRESS_KEY',       // page-level key press (e.g. '/', 'Enter', 'Escape')
 
   // Utilities
   SCREENSHOT:     'SCREENSHOT',
