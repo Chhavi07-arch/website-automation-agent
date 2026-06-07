@@ -1,0 +1,31 @@
+{
+  "name": "website-automation-agent",
+  "version": "1.0.0",
+  "description": "Intelligent browser automation agent framework inspired by Browser Use",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "playwright": "^1.44.0",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "browser-automation",
+    "playwright",
+    "agent",
+    "web-scraping"
+  ],
+  "author": "",
+  "license": "MIT"
+}

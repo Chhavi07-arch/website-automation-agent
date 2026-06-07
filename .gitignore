@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Logs
+logs/
+*.log
+
+# Screenshots generated during runs
+screenshots/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/settings.json
+.idea/
+
+# Playwright
+playwright-report/
+test-results/
+
+# Coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Runtime caches
+.cache/
+
+# Claude
+.claude/settings.local.json
