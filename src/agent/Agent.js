@@ -1,37 +1,41 @@
 /**
  * Agent.js
  *
- * The central orchestrator that implements the OTAV (Observe → Think → Act →
- * Verify) loop described in CLAUDE.md.
+ * Central orchestrator implementing the OTAV (Observe → Think → Act → Verify)
+ * loop.  In V2 it also owns the Planner, which sits between a Workflow's goal
+ * declaration and the ActionExecutor's dispatch.
+ *
+ * Architecture (V2):
+ *   Workflow → agent.generatePlan(goal, params)
+ *            → Planner  → action[]
+ *            → agent.executor.executeAll(plan)
+ *            → ActionExecutor → Tools → Playwright
  *
  * Design philosophy:
- *   - The Agent owns the browser lifecycle and holds references to every tool
- *     and service.  Workflows receive a fully-wired agent instance and call
- *     high-level methods on it.
- *   - The Agent does NOT contain any page-specific or task-specific logic.
- *     That belongs in Workflows.
- *   - Future AI integration (Phase 4) will replace or augment the `think()`
- *     method with an LLM call.  The interface is already prepared for it.
+ *   - Agent owns every component; Workflows hold only an Agent reference.
+ *   - No page-specific or task-specific logic lives here.
+ *   - Future AI integration (Phase 4) will replace Planner.generatePlan() with
+ *     an LLM call — the Agent interface does not change.
  *
  * Usage:
  *   const agent = new Agent();
  *   await agent.initialize();
- *   // pass agent to a workflow
  *   await new FillShadcnFormWorkflow(agent).run();
  *   await agent.shutdown();
  */
 
-import { BrowserManager }        from '../tools/BrowserManager.js';
-import { NavigationTool }        from '../tools/NavigationTool.js';
-import { ScreenshotTool }        from '../tools/ScreenshotTool.js';
-import { InputTool }             from '../tools/InputTool.js';
-import { ClickTool }             from '../tools/ClickTool.js';
-import { ScrollTool }            from '../tools/ScrollTool.js';
+import { BrowserManager }          from '../tools/BrowserManager.js';
+import { NavigationTool }          from '../tools/NavigationTool.js';
+import { ScreenshotTool }          from '../tools/ScreenshotTool.js';
+import { InputTool }               from '../tools/InputTool.js';
+import { ClickTool }               from '../tools/ClickTool.js';
+import { ScrollTool }              from '../tools/ScrollTool.js';
 import { ElementDetectionService } from '../services/ElementDetectionService.js';
-import { FormDetectionService }  from '../services/FormDetectionService.js';
-import { ValidationService }     from '../services/ValidationService.js';
-import { ActionExecutor }        from './ActionExecutor.js';
-import logger                    from '../utils/logger.js';
+import { FormDetectionService }    from '../services/FormDetectionService.js';
+import { ValidationService }       from '../services/ValidationService.js';
+import { ActionExecutor }          from './ActionExecutor.js';
+import { Planner }                 from './Planner.js';
+import logger                      from '../utils/logger.js';
 
 export class Agent {
   constructor() {
@@ -47,6 +51,9 @@ export class Agent {
     /** @type {ElementDetectionService|null} */ this.elementDetection = null;
     /** @type {FormDetectionService|null} */   this.formDetection    = null;
     /** @type {ValidationService|null} */      this.validation       = null;
+
+    // --- Planning layer ---
+    /** @type {Planner|null} */        this.planner  = null;
 
     // --- Action dispatcher ---
     /** @type {ActionExecutor|null} */ this.executor = null;
@@ -82,10 +89,13 @@ export class Agent {
     this.formDetection    = new FormDetectionService(this._page);
     this.validation       = new ValidationService(this._page);
 
-    // Wire executor (needs tool references to dispatch actions)
+    // Wire executor (dispatches action objects to tools)
     this.executor = new ActionExecutor(this);
 
-    logger.info('Agent ready — all tools and services initialised');
+    // Wire planner (translates goals into action arrays for the executor)
+    this.planner  = new Planner(this);
+
+    logger.info('Agent ready — all tools, services, and planner initialised');
   }
 
   /**
@@ -138,6 +148,31 @@ export class Agent {
    */
   verify(message) {
     logger.verify(message);
+  }
+
+  /**
+   * Log a planning step (emitted by the Planner before execution begins).
+   *
+   * @param {string} message
+   */
+  plan(message) {
+    logger.plan(message);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Planning proxy — Workflows call this instead of importing Planner directly
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Generate an action plan for a named goal.
+   * Thin proxy to Planner.generatePlan() so Workflows have a single import.
+   *
+   * @param {string} goalKey  - One of ACTION_TYPES.GOALS.*
+   * @param {object} [params] - Goal-specific parameters.
+   * @returns {object[]}      - Ordered action descriptors ready for executeAll().
+   */
+  generatePlan(goalKey, params = {}) {
+    return this.planner.generatePlan(goalKey, params);
   }
 
   // ---------------------------------------------------------------------------

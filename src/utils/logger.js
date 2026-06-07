@@ -1,17 +1,19 @@
 /**
  * logger.js
  *
- * Winston-based logger with four custom OTAV levels layered on top of the
- * standard Winston levels.  Every module in the project imports this singleton
- * so all logs flow through one consistent channel.
+ * Winston-based logger with custom levels for the OTAV cycle + planning layer.
+ * Every module imports this singleton so all logs flow through one channel.
  *
- * Custom levels (highest → lowest priority inside OTAV):
- *   observe  – something was detected / read from the page
- *   think    – a decision was made or reasoning was performed
- *   act      – an action is being executed
- *   verify   – the result of an action was checked
- *
- * Standard Winston levels (error, warn, info, …) remain available.
+ * Level hierarchy (lower number = higher priority):
+ *   error   – unrecoverable failure
+ *   warn    – recoverable problem
+ *   plan    – Planner emitting a numbered step (always visible)
+ *   observe – something detected / read from the page
+ *   think   – reasoning or decision made
+ *   act     – action is being executed
+ *   verify  – result of an action checked
+ *   info    – general lifecycle messages
+ *   debug   – verbose internal state
  */
 
 import winston from 'winston';
@@ -22,22 +24,24 @@ import config from '../config/env.js';
 const LOGS_DIR = path.resolve('logs');
 ensureDir(LOGS_DIR);
 
-// Extend default levels with OTAV cycle levels.
+// Extend default levels with OTAV + planning levels.
 // Lower numeric value = higher severity in Winston's convention.
 const customLevels = {
   levels: {
     error:   0,
     warn:    1,
-    observe: 2,
-    think:   3,
-    act:     4,
-    verify:  5,
-    info:    6,
-    debug:   7,
+    plan:    2,   // Planner steps — always visible, above observe/think/act
+    observe: 3,
+    think:   4,
+    act:     5,
+    verify:  6,
+    info:    7,
+    debug:   8,
   },
   colors: {
     error:   'red',
     warn:    'yellow',
+    plan:    'bold yellow',  // distinct from warn; signals structured plan output
     observe: 'cyan',
     think:   'magenta',
     act:     'green',

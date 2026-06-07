@@ -18,8 +18,9 @@ export const ELEMENT_DETECTION_PRIORITY = [
   'css',          // fallback: CSS selector
 ];
 
-/** Log level names used in the OTAV (Observe-Think-Act-Verify) cycle. */
+/** Log level names used in the OTAV cycle + planning layer. */
 export const LOG_LEVELS = {
+  PLAN:    'plan',    // Planner emitting a structured step description
   OBSERVE: 'observe',
   THINK:   'think',
   ACT:     'act',
@@ -49,12 +50,31 @@ export const DESCRIPTION_FIELD_HINTS = ['description', 'bio', 'about', 'details'
 
 /** Action type strings dispatched through ActionExecutor. */
 export const ACTION_TYPES = {
-  NAVIGATE:      'NAVIGATE',
-  CLICK:         'CLICK',
-  DOUBLE_CLICK:  'DOUBLE_CLICK',
-  FILL:          'FILL',
-  SEND_KEYS:     'SEND_KEYS',
-  SCROLL:        'SCROLL',
-  SCREENSHOT:    'SCREENSHOT',
-  WAIT:          'WAIT',
+  // Navigation
+  NAVIGATE:       'NAVIGATE',
+  WAIT_FOR_IDLE:  'WAIT_FOR_IDLE',   // wait until network is quiet
+
+  // Mouse
+  CLICK:          'CLICK',
+  DOUBLE_CLICK:   'DOUBLE_CLICK',
+
+  // Keyboard
+  FILL:           'FILL',
+  SEND_KEYS:      'SEND_KEYS',
+
+  // Page movement
+  SCROLL:         'SCROLL',
+
+  // Intelligence (Planner-specific)
+  DETECT_FIELD:   'DETECT_FIELD',    // resolve a named field → locator, cache in registry
+  VERIFY_FIELD:   'VERIFY_FIELD',    // assert a field's current value equals expected
+
+  // Utilities
+  SCREENSHOT:     'SCREENSHOT',
+  WAIT:           'WAIT',            // sleep for N ms
+
+  /** Named goal identifiers passed to Planner.generatePlan(). */
+  GOALS: {
+    FILL_SHADCN_FORM: 'FILL_SHADCN_FORM',
+  },
 };
