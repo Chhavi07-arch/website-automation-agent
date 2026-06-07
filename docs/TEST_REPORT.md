@@ -1,41 +1,42 @@
-Test:
+# Test Report
 
-Test 1
+## Test 1 - Normal Execution
 
-Normal execution
+Status: PASS
 
-Expected:
+Verified:
+- Browser launched
+- URL loaded
+- Form detected
+- Name filled
+- Description filled
+- Screenshots captured
+- Logs generated
 
-Pass
-Test 2
+---
 
-Wrong URL
+## Test 2 - Invalid URL
 
-Change:
+Status: PASS
 
-TARGET_URL=abc
+Verified:
+- Error handled gracefully
+- Browser closed cleanly
 
-Expected:
+---
 
-Graceful error
+## Test 3 - Empty Name
 
-not crash.
+Status: PASS
 
-Test 3
+Verified:
+- Validation warning generated
 
-Empty Name
+---
 
-FORM_NAME=
+## Test 4 - Slow Network
 
-Expected:
+Status: PASS
 
-Validation warning
-Test 4
-
-Slow Network
-
-Add artificial delay.
-
-Expected:
-
-Retries
+Verified:
+- Retry mechanism executed
