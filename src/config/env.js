@@ -80,6 +80,18 @@ const config = {
     githubQuery: process.env.GITHUB_QUERY || 'playwright',
   },
 
+  retry: {
+    /** Max attempts for retryable element actions (CLICK, FILL, DETECT_FIELD, …) */
+    actionRetries: parseInt_(process.env.RETRY_COUNT, 3),
+    /**
+     * Max attempts for NAVIGATE. Kept small and bounded — navigation must NOT
+     * retry indefinitely. Default 2 = one retry after a transient failure.
+     */
+    navigationRetries: parseInt_(process.env.NAV_RETRY_COUNT, 2),
+    /** First backoff delay in ms; doubles each attempt (500 → 1000 → 2000). */
+    baseDelay: parseInt_(process.env.RETRY_BASE_DELAY_MS, 500),
+  },
+
   logging: {
     /** Minimum log level: error | warn | info | verbose | debug | silly */
     level: process.env.LOG_LEVEL || 'info',

@@ -5,15 +5,16 @@
  * Every module imports this singleton so all logs flow through one channel.
  *
  * Level hierarchy (lower number = higher priority):
- *   error   – unrecoverable failure
- *   warn    – recoverable problem
- *   plan    – Planner emitting a numbered step (always visible)
- *   observe – something detected / read from the page
- *   think   – reasoning or decision made
- *   act     – action is being executed
- *   verify  – result of an action checked
- *   info    – general lifecycle messages
- *   debug   – verbose internal state
+ *   error    – unrecoverable failure
+ *   warn     – recoverable problem (includes [RETRY] attempt logs)
+ *   recovery – self-healing decision (scroll & re-scan, force rescan, …)
+ *   plan     – Planner emitting a numbered step (always visible)
+ *   observe  – something detected / read from the page
+ *   think    – reasoning or decision made
+ *   act      – action is being executed
+ *   verify   – result of an action checked
+ *   info     – general lifecycle messages
+ *   debug    – verbose internal state
  */
 
 import winston from 'winston';
@@ -28,26 +29,28 @@ ensureDir(LOGS_DIR);
 // Lower numeric value = higher severity in Winston's convention.
 const customLevels = {
   levels: {
-    error:   0,
-    warn:    1,
-    plan:    2,   // Planner steps — always visible, above observe/think/act
-    observe: 3,
-    think:   4,
-    act:     5,
-    verify:  6,
-    info:    7,
-    debug:   8,
+    error:    0,
+    warn:     1,
+    recovery: 2,   // self-healing decisions — high visibility, above plan
+    plan:     3,   // Planner steps — always visible, above observe/think/act
+    observe:  4,
+    think:    5,
+    act:      6,
+    verify:   7,
+    info:     8,
+    debug:    9,
   },
   colors: {
-    error:   'red',
-    warn:    'yellow',
-    plan:    'bold yellow',  // distinct from warn; signals structured plan output
-    observe: 'cyan',
-    think:   'magenta',
-    act:     'green',
-    verify:  'blue',
-    info:    'white',
-    debug:   'grey',
+    error:    'red',
+    warn:     'yellow',
+    recovery: 'bold red',    // stands out: agent is healing from a failure
+    plan:     'bold yellow', // distinct from warn; signals structured plan output
+    observe:  'cyan',
+    think:    'magenta',
+    act:      'green',
+    verify:   'blue',
+    info:     'white',
+    debug:    'grey',
   },
 };
 

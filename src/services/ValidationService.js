@@ -95,4 +95,66 @@ export class ValidationService {
       return false;
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Reusable verification actions (V4)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Verify an element is visible, waiting up to the element timeout for it to
+   * appear.  Unlike elementIsVisible() (an instantaneous check), this gives a
+   * lazily-rendered element time to show up — useful in recovery scenarios.
+   *
+   * @param {import('playwright').Locator} locator
+   * @returns {Promise<boolean>}
+   */
+  async verifyElementVisible(locator) {
+    try {
+      await locator.waitFor({ state: 'visible', timeout: config.timeouts.element });
+      logger.verify('Element is visible');
+      return true;
+    } catch {
+      logger.warn('Element did not become visible within timeout');
+      return false;
+    }
+  }
+
+  /**
+   * Verify an element is enabled (not disabled / not [aria-disabled]).
+   *
+   * @param {import('playwright').Locator} locator
+   * @returns {Promise<boolean>}
+   */
+  async verifyElementEnabled(locator) {
+    const enabled = await locator.isEnabled().catch(() => false);
+    if (enabled) {
+      logger.verify('Element is enabled');
+    } else {
+      logger.warn('Element is NOT enabled');
+    }
+    return enabled;
+  }
+
+  /**
+   * Verify the page finished loading (document.readyState === 'complete').
+   * Waits for the 'load' state up to the page-load timeout first.
+   *
+   * @returns {Promise<boolean>}
+   */
+  async verifyPageLoaded() {
+    try {
+      await this._page.waitForLoadState('load', { timeout: config.timeouts.pageLoad });
+      const state = await this._page.evaluate(() => document.readyState);
+      const loaded = state === 'complete';
+      if (loaded) {
+        logger.verify('Page fully loaded (readyState=complete)');
+      } else {
+        logger.warn(`Page not fully loaded (readyState=${state})`);
+      }
+      return loaded;
+    } catch {
+      logger.warn('verifyPageLoaded: timed out waiting for load state');
+      return false;
+    }
+  }
 }

@@ -176,6 +176,15 @@ export class Agent {
     logger.plan(message);
   }
 
+  /**
+   * Log a self-healing recovery decision (scroll & re-scan, force rescan, …).
+   *
+   * @param {string} message
+   */
+  recovery(message) {
+    logger.recovery(message);
+  }
+
   // ---------------------------------------------------------------------------
   // Planning proxy — Workflows call this instead of importing Planner directly
   // ---------------------------------------------------------------------------

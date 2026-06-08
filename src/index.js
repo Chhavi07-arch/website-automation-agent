@@ -15,12 +15,15 @@
  * To switch workflows: edit GOAL= in .env.  No code changes needed.
  */
 
-import { Agent }  from './agent/Agent.js';
-import config     from './config/env.js';
-import logger     from './utils/logger.js';
+import { Agent }                 from './agent/Agent.js';
+import { writeDiagnosticReport } from './utils/diagnostics.js';
+import config                    from './config/env.js';
+import logger                    from './utils/logger.js';
 
 async function main() {
   const agent = new Agent();
+  const goalKey = config.target.goal;
+  let workflow = null;
 
   try {
     // --- Initialise: launches browser, wires tools, planner, router ---
@@ -30,18 +33,25 @@ async function main() {
     await agent.screenshot.capture('browser-launched');
 
     // --- Read the active goal and route to the correct workflow ---
-    const goalKey  = config.target.goal;
     logger.info(`Active goal: "${goalKey}"`);
     logger.info(`Available goals: [${agent.router.listGoals().join(', ')}]`);
 
-    const workflow = agent.router.route(goalKey);
+    workflow = agent.router.route(goalKey);
     await workflow.run();
 
     logger.info('All done. Agent exiting successfully.');
   } catch (error) {
     logger.error(`Unhandled error in main: ${error.message}`);
     logger.error(error.stack);
-    try { await agent.screenshot.capture('error-state'); } catch { /* best-effort */ }
+
+    // --- Diagnostic Mode: capture screenshot + URL + title + failed action ---
+    await writeDiagnosticReport(agent, {
+      goal: goalKey,
+      workflow: workflow?.constructor?.name ?? 'unknown',
+      failedAction: error.failedAction ?? null,
+      error,
+    });
+
     process.exitCode = 1;
   } finally {
     await agent.shutdown();

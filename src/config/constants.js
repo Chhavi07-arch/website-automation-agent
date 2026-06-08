@@ -18,13 +18,14 @@ export const ELEMENT_DETECTION_PRIORITY = [
   'css',          // fallback: CSS selector
 ];
 
-/** Log level names used in the OTAV cycle + planning layer. */
+/** Log level names used in the OTAV cycle + planning + resilience layers. */
 export const LOG_LEVELS = {
-  PLAN:    'plan',    // Planner emitting a structured step description
-  OBSERVE: 'observe',
-  THINK:   'think',
-  ACT:     'act',
-  VERIFY:  'verify',
+  RECOVERY: 'recovery', // self-healing decision (scroll & re-scan, force rescan, …)
+  PLAN:     'plan',     // Planner emitting a structured step description
+  OBSERVE:  'observe',
+  THINK:    'think',
+  ACT:      'act',
+  VERIFY:   'verify',
 };
 
 /** How many times to retry a flaky action before giving up. */

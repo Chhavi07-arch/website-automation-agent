@@ -7,7 +7,11 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+    "test": "node tests/resilience.test.mjs",
+    "shadcn": "cross-env GOAL=FILL_SHADCN_FORM node src/index.js",
+    "google": "cross-env GOAL=SEARCH_GOOGLE node src/index.js",
+    "github": "cross-env GOAL=SEARCH_GITHUB node src/index.js",
+    "postinstall": "playwright install chromium"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
@@ -15,7 +19,7 @@
     "winston": "^3.13.0"
   },
   "devDependencies": {
-    "jest": "^29.7.0"
+    "cross-env": "^7.0.3"
   },
   "engines": {
     "node": ">=18.0.0"
