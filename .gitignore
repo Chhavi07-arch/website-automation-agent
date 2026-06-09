@@ -11,6 +11,9 @@ logs/
 # Screenshots generated during runs
 screenshots/
 
+# HTML run reports generated during runs
+reports/
+
 # OS files
 .DS_Store
 Thumbs.db

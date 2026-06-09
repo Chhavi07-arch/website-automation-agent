@@ -1,0 +1,21 @@
+{
+  "name": "stackoverflow_search",
+  "description": "Search Stack Overflow for {{query}}; open the first result if results rendered, else just capture the page. Demonstrates variables + conditional (if/then/else).",
+  "vars": { "query": "playwright" },
+  "steps": [
+    { "action": "navigate", "url": "https://stackoverflow.com/search?q={{query}}" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "screenshot", "label": "so-search-page" },
+    {
+      "if": { "selector_exists": ".s-post-summary" },
+      "then": [
+        { "action": "verify_selector", "selector": ".s-post-summary" },
+        { "action": "open_first_result", "selector": ".s-post-summary--content-title a, .s-post-summary .s-link" },
+        { "action": "screenshot", "label": "so-first-result" }
+      ],
+      "else": [
+        { "action": "screenshot", "label": "so-no-results-or-blocked" }
+      ]
+    }
+  ]
+}

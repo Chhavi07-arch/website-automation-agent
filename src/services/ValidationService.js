@@ -180,6 +180,46 @@ export class ValidationService {
   }
 
   // ---------------------------------------------------------------------------
+  // Selector-based checks (P3) — generic, reusable across sites
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Wait until a CSS selector is visible, up to the element timeout.
+   *
+   * @param {string} selector
+   * @returns {Promise<boolean>}
+   */
+  async waitForSelector(selector) {
+    try {
+      await this._page.waitForSelector(selector, {
+        state: 'visible',
+        timeout: config.timeouts.element,
+      });
+      logger.verify(`Selector became visible: "${selector}"`);
+      return true;
+    } catch {
+      logger.warn(`Selector not visible within timeout: "${selector}"`);
+      return false;
+    }
+  }
+
+  /**
+   * Assert that a CSS selector is currently present and visible.
+   *
+   * @param {string} selector
+   * @returns {Promise<boolean>}
+   */
+  async verifySelectorPresent(selector) {
+    const visible = await this._page.locator(selector).first().isVisible().catch(() => false);
+    if (visible) {
+      logger.verify(`Selector present: "${selector}"`);
+    } else {
+      logger.warn(`Selector NOT present: "${selector}"`);
+    }
+    return visible;
+  }
+
+  // ---------------------------------------------------------------------------
   // Blocked-state detection (P2) — anti-bot walls
   // ---------------------------------------------------------------------------
 

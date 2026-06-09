@@ -62,6 +62,7 @@ export class Planner {
       [ACTION_TYPES.GOALS.FILL_SHADCN_FORM]: () => this._planFillShadcnForm(params),
       [ACTION_TYPES.GOALS.SEARCH_GOOGLE]:    () => this._planSearchGoogle(params),
       [ACTION_TYPES.GOALS.SEARCH_GITHUB]:    () => this._planSearchGitHub(params),
+      [ACTION_TYPES.GOALS.MULTI_STEP]:       () => this._planMultiStep(params),
     };
 
     const planFn = GOAL_MAP[goalKey];
@@ -245,6 +246,133 @@ export class Planner {
   }
 
   // ---------------------------------------------------------------------------
+  // Multi-step task translation (P3)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Translate a reusable task definition (loaded from JSON) into the low-level
+   * action[] the ActionExecutor runs.
+   *
+   * This is the single translation point between the human/LLM-friendly task
+   * vocabulary (navigate, search, submit, open_first_result, …) and the
+   * executor's ACTION_TYPES. A future OpenAI planner will emit the SAME task
+   * JSON — so it plugs in here without touching the executor.
+   *
+   * Supported task verbs:
+   *   navigate {url}                  → NAVIGATE + WAIT_FOR_IDLE
+   *   search   {field, value}         → DETECT_FIELD + CLICK + FILL
+   *   fill     {field, value}         → DETECT_FIELD + FILL
+   *   click    {field}               → DETECT_FIELD + CLICK
+   *   submit   {key?, ms?}            → PRESS_KEY + WAIT + WAIT_FOR_IDLE
+   *   open_first_result {selector?}   → OPEN_FIRST_RESULT + WAIT_FOR_IDLE
+   *   wait     {ms}                   → WAIT
+   *   wait_for_selector {selector}    → WAIT_FOR_SELECTOR
+   *   verify_selector {selector, fatal?} → VERIFY_SELECTOR
+   *   verify_url {fragment, fatal?}   → VERIFY_URL
+   *   scroll   {direction?, pixels?}  → SCROLL
+   *   screenshot {label?}             → SCREENSHOT
+   *
+   * @param {object} params
+   * @param {{name:string, steps:object[]}} params.task
+   * @returns {object[]}
+   */
+  _planMultiStep({ task }) {
+    if (!task || !Array.isArray(task.steps)) {
+      throw new Error('Planner: MULTI_STEP requires params.task with a steps[] array');
+    }
+
+    logger.plan(`Translating task "${task.name}" (${task.steps.length} task-steps)`);
+    const plan = [];
+    task.steps.forEach((step, idx) => {
+      plan.push(...this.translateTaskStep(step, idx));
+    });
+    return plan;
+  }
+
+  /**
+   * Translate ONE task step into its low-level action(s). This is the single
+   * task-verb → ACTION_TYPES mapping, used both by _planMultiStep (flat tasks)
+   * and by MultiStepWorkflow (step-by-step, for conditionals/continueOnFailure).
+   *
+   * @param {object} step  - A task step (must have an `action`).
+   * @param {number} [idx] - 0-based index, for error messages.
+   * @returns {object[]} low-level action descriptors
+   */
+  translateTaskStep(step, idx = 0) {
+    const A = ACTION_TYPES;
+    const n = idx + 1;
+    const action = String(step.action || '').toLowerCase();
+    const need = (cond, msg) => { if (!cond) throw new Error(`MULTI_STEP step ${n} (${action}): ${msg}`); };
+
+    switch (action) {
+      case 'navigate':
+        need(step.url, 'missing "url"');
+        return [{ type: A.NAVIGATE, url: step.url }, { type: A.WAIT_FOR_IDLE }];
+
+      case 'search':
+        need(step.field, 'missing "field"');
+        need(step.value !== undefined, 'missing "value"');
+        return [
+          { type: A.DETECT_FIELD, field: step.field },
+          { type: A.CLICK, field: step.field },
+          { type: A.FILL, field: step.field, value: step.value },
+        ];
+
+      case 'fill':
+        need(step.field, 'missing "field"');
+        need(step.value !== undefined, 'missing "value"');
+        return [
+          { type: A.DETECT_FIELD, field: step.field },
+          { type: A.FILL, field: step.field, value: step.value },
+        ];
+
+      case 'click':
+        need(step.field, 'missing "field"');
+        return [
+          { type: A.DETECT_FIELD, field: step.field },
+          { type: A.CLICK, field: step.field },
+        ];
+
+      case 'submit':
+        return [
+          { type: A.PRESS_KEY, key: step.key || 'Enter' },
+          { type: A.WAIT, ms: step.ms || 1500 },
+          { type: A.WAIT_FOR_IDLE },
+        ];
+
+      case 'open_first_result':
+        return [
+          { type: A.OPEN_FIRST_RESULT, selector: step.selector },
+          { type: A.WAIT_FOR_IDLE },
+        ];
+
+      case 'wait':
+        return [{ type: A.WAIT, ms: step.ms || 1000 }];
+
+      case 'wait_for_selector':
+        need(step.selector, 'missing "selector"');
+        return [{ type: A.WAIT_FOR_SELECTOR, selector: step.selector }];
+
+      case 'verify_selector':
+        need(step.selector, 'missing "selector"');
+        return [{ type: A.VERIFY_SELECTOR, selector: step.selector, fatal: step.fatal !== false }];
+
+      case 'verify_url':
+        need(step.fragment, 'missing "fragment"');
+        return [{ type: A.VERIFY_URL, fragment: step.fragment, fatal: step.fatal !== false }];
+
+      case 'scroll':
+        return [{ type: A.SCROLL, direction: step.direction || 'down', pixels: step.pixels || 500 }];
+
+      case 'screenshot':
+        return [{ type: A.SCREENSHOT, label: step.label || `step-${n}` }];
+
+      default:
+        throw new Error(`MULTI_STEP: unsupported action "${step.action}" at step ${n}`);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
@@ -287,6 +415,12 @@ export class Planner {
         return `Verify results rendered (selector or empty-state)${step.fatal ? ' (hard gate)' : ''}`;
       case ACTION_TYPES.CHECK_BLOCKED:
         return 'Check for anti-bot wall (CAPTCHA / consent) → BLOCKED if present';
+      case ACTION_TYPES.OPEN_FIRST_RESULT:
+        return `Open first result (${step.selector || 'default heuristic'})`;
+      case ACTION_TYPES.WAIT_FOR_SELECTOR:
+        return `Wait for selector "${step.selector}"`;
+      case ACTION_TYPES.VERIFY_SELECTOR:
+        return `Verify selector "${step.selector}"${step.fatal ? ' (hard gate)' : ''}`;
       default:
         return step.type;
     }

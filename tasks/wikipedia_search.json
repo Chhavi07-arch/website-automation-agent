@@ -1,0 +1,14 @@
+{
+  "name": "wikipedia_search",
+  "description": "Search Wikipedia for {{query}} and open the article. Demonstrates variable substitution and continueOnFailure.",
+  "vars": { "query": "Web scraping" },
+  "steps": [
+    { "action": "navigate", "url": "https://en.wikipedia.org" },
+    { "action": "search", "field": "search", "value": "{{query}}" },
+    { "action": "submit" },
+    { "action": "wait_for_selector", "selector": "#firstHeading" },
+    { "action": "verify_selector", "selector": "#mw-content-text" },
+    { "action": "verify_selector", "selector": ".infobox", "continueOnFailure": true },
+    { "action": "screenshot", "label": "wikipedia-{{query}}" }
+  ]
+}

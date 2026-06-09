@@ -101,6 +101,19 @@ const config = {
     githubQuery: process.env.GITHUB_QUERY || 'playwright',
   },
 
+  task: {
+    /**
+     * Task definition file (under tasks/) executed by the MULTI_STEP goal.
+     * e.g. TASK_FILE=github_playwright.json GOAL=MULTI_STEP npm start
+     */
+    file: process.env.TASK_FILE || 'github_playwright.json',
+  },
+
+  report: {
+    /** Write a self-contained HTML run report after each run (reports/). */
+    enabled: parseBool(process.env.REPORT, true),
+  },
+
   retry: {
     /** Max attempts for retryable element actions (CLICK, FILL, DETECT_FIELD, …) */
     actionRetries: parseInt_(process.env.RETRY_COUNT, 3),

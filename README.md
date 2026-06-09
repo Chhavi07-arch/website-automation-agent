@@ -152,6 +152,10 @@ flowchart TB
 - **Observe → Think → Act → Verify** loop with a custom colour-coded Winston logger (`OBSERVE`/`THINK`/`ACT`/`VERIFY`/`PLAN`/`RECOVERY` levels).
 - **Accessibility-first element detection** — tries label → ARIA role → placeholder → name attribute → CSS, returning the first *visible* match.
 - **Goal-routed workflows** — pick the task with `GOAL=` in `.env`, no code changes.
+- **Multi-step engine** — run reusable tasks from JSON files (`GOAL=MULTI_STEP TASK_FILE=…`) with **no per-task code**; the same task format a future LLM planner would emit.
+- **Variable substitution** — `{{query}}` placeholders in task JSON resolve from env or a `vars` block; missing variables fail clearly.
+- **Conditional execution** — deterministic `{ "if": { "selector_exists": … }, "then": [...], "else": [...] }` and per-step `continueOnFailure` (no agent loop).
+- **Self-contained HTML run report** — `reports/report_<ts>.html` with steps, retries, recovery, screenshots, outcome, and final URL (no external deps).
 - **Pure-data action plans** — the `Planner` outputs serialisable `action[]`, logged in full *before* execution (AI-ready seam).
 - **Automatic retries** with exponential backoff (500 → 1000 → 2000 ms), configurable.
 - **Self-healing recovery ladder** for field detection (scroll & re-scan → full re-scan → diagnostic).
@@ -173,6 +177,7 @@ flowchart TB
 | `FILL_SHADCN_FORM` | Fills the shadcn React Hook Form demo (name + description) and verifies values | Accessible `<label>` matching |
 | `SEARCH_GOOGLE` | Searches Google; detects CAPTCHA/consent walls → **BLOCKED**; else verifies `q=<query>` + results rendered | ARIA searchbox / `name="q"` |
 | `SEARCH_GITHUB` | Searches GitHub via `/search`; verifies `q=<query>` in the URL **and** that results rendered | Visible-input filtering past hidden header button |
+| `MULTI_STEP` | Runs **any** reusable task from a JSON file (`TASK_FILE=…`) — no code per task | JSON `steps[]` → Planner → Executor |
 
 Example (shadcn) plan, logged before anything runs:
 
@@ -198,7 +203,7 @@ WebsiteAutomation/
 │   │   ├── GoalRouter.js         #   goal key → workflow (registry pattern)
 │   │   ├── Planner.js            #   goal → pure-data action[]
 │   │   └── ActionExecutor.js     #   dispatch + retry + recovery ladder
-│   ├── workflows/                # Task-specific flows (goal-oriented)
+│   ├── workflows/                # Goal-oriented flows (incl. generic MultiStepWorkflow)
 │   │   ├── FillShadcnFormWorkflow.js
 │   │   ├── SearchGoogleWorkflow.js
 │   │   └── SearchGitHubWorkflow.js
@@ -215,9 +220,12 @@ WebsiteAutomation/
 │   ├── config/                   # Configuration
 │   │   ├── env.js      constants.js
 │   └── index.js                  # Entry point
-├── tests/
-│   └── resilience.test.mjs       # Deterministic retry/recovery scenarios
+├── tasks/                        # Reusable multi-step task definitions (JSON)
+│   ├── github_playwright.json  github_openai.json  shadcn_demo.json
+│   ├── wikipedia_search.json   hackernews_top.json  stackoverflow_search.json
+├── tests/                        # Deterministic suites (resilience, verification, multi-step, engine)
 ├── docs/                         # Architecture, test reports, viva & demo guides
+├── reports/                      # Self-contained HTML run reports (generated)
 ├── screenshots/                  # Timestamped run screenshots (generated)
 ├── logs/                         # agent.log, errors.log, errors/*.json (generated)
 ├── .env.example                  # Copy to .env
@@ -264,6 +272,9 @@ cp .env.example .env
 | `USERNAME` | `chhavi_ahlawat` | Value for the shadcn **username** field (the "name" field is really a username) |
 | `FORM_DESCRIPTION` | student bio | Value for the shadcn description textarea |
 | `GOOGLE_QUERY` / `GITHUB_QUERY` | — | Search queries |
+| `TASK_FILE` | `github_playwright.json` | Task file (under `tasks/`) for `GOAL=MULTI_STEP` |
+| `REPORT` | `true` | Write a self-contained HTML run report to `reports/` |
+| `<VAR>` (e.g. `QUERY`) | — | Any task `{{token}}` resolves from env (`TOKEN`) or the task `vars` block |
 | `RETRY_COUNT` | `3` | Max attempts for retryable actions |
 | `NAV_RETRY_COUNT` | `2` | Max NAVIGATE attempts (bounded) |
 | `RETRY_BASE_DELAY_MS` | `500` | First backoff; doubles each attempt |
@@ -283,6 +294,7 @@ npm start            # runs the goal set in .env (default: FILL_SHADCN_FORM)
 npm run shadcn       # FILL_SHADCN_FORM
 npm run google       # SEARCH_GOOGLE
 npm run github       # SEARCH_GITHUB
+npm run task         # MULTI_STEP (uses TASK_FILE, default github_playwright.json)
 ```
 
 Or set the goal inline:
@@ -290,6 +302,60 @@ Or set the goal inline:
 ```bash
 GOAL=SEARCH_GITHUB npm start
 ```
+
+### 🧩 Multi-Step Tasks (run reusable JSON, no code)
+
+Execute any task definition in `tasks/` — no new workflow class needed:
+
+```bash
+TASK_FILE=github_playwright.json   npm run task
+TASK_FILE=shadcn_demo.json         npm run task
+TASK_FILE=wikipedia_search.json    npm run task   # variables + continueOnFailure
+TASK_FILE=hackernews_top.json      npm run task   # open first result
+TASK_FILE=stackoverflow_search.json npm run task  # conditional if/then/else
+```
+
+A task is plain data; the Planner translates its `steps[]` into executable actions:
+
+```json
+{
+  "name": "github_playwright",
+  "steps": [
+    { "action": "navigate", "url": "https://github.com/search" },
+    { "action": "search", "field": "search", "value": "playwright" },
+    { "action": "submit" },
+    { "action": "verify_url", "fragment": "q=playwright" },
+    { "action": "open_first_result", "selector": "[data-testid=\"results-list\"] a" },
+    { "action": "screenshot", "label": "repo" }
+  ]
+}
+```
+
+Supported verbs: `navigate`, `search`, `fill`, `click`, `submit`, `open_first_result`, `wait`, `wait_for_selector`, `verify_selector`, `verify_url`, `scroll`, `screenshot`. Details: [docs/ARCHITECTURE_V6.md](docs/ARCHITECTURE_V6.md).
+
+**Variables** — use `{{token}}` anywhere and supply values via env or a `vars` block (env wins):
+
+```json
+{ "name": "wiki", "vars": { "query": "Web scraping" },
+  "steps": [ { "action": "search", "field": "search", "value": "{{query}}" } ] }
+```
+```bash
+QUERY="Hypertext" TASK_FILE=wikipedia_search.json npm run task   # env overrides the default
+```
+
+**Conditionals & tolerance** — deterministic branching (no agent loop):
+
+```json
+{ "if": { "selector_exists": ".s-post-summary" },
+  "then": [ { "action": "open_first_result", "selector": ".s-post-summary a" } ],
+  "else": [ { "action": "screenshot", "label": "no-results" } ] }
+```
+```json
+{ "action": "verify_selector", "selector": ".infobox", "continueOnFailure": true }
+```
+Conditions: `selector_exists`, `selector_missing`, `url_contains` (multiple keys are AND-ed).
+
+**Run report** — each run writes a self-contained `reports/report_<timestamp>.html` (open it in any browser). Disable with `REPORT=false`.
 
 ### 🎬 Demo Mode (for viva / recruiter demos)
 
@@ -311,7 +377,7 @@ All three default to OFF, so normal runs are unchanged.
 ## 🧪 Testing
 
 ```bash
-npm test             # resilience + GitHub verification + Google outcome suites
+npm test             # resilience + GitHub + Google + multi-step suites
 ```
 
 All suites drive the real `ActionExecutor` against controlled `data:` URL pages — deterministic, no live websites needed.
@@ -343,7 +409,11 @@ All suites drive the real `ActionExecutor` against controlled `data:` URL pages 
 | **4 — Unusual traffic** | "unusual traffic" → BLOCKED |
 | **5 — Normal failure** | no results, not blocked → FAILED |
 
-Full results: [V3](docs/TEST_REPORT_V3.md) (resilience) · [V4](docs/TEST_REPORT_V4.md) (P1 fixes) · [V5](docs/TEST_REPORT_V5.md) (P2 Google).
+**Multi-step engine** (`tests/multistep.test.mjs`) — valid execution, missing file, invalid schema, unsupported action, GitHub-like task (5 scenarios).
+
+**Engine hardening** (`tests/engine.test.mjs`) — variable substitution, missing-variable error, conditional then/else branches, continueOnFailure (5 scenarios).
+
+Full results: [V3](docs/TEST_REPORT_V3.md) (resilience) · [V4](docs/TEST_REPORT_V4.md) (P1) · [V5](docs/TEST_REPORT_V5.md) (P2 Google) · [V6](docs/TEST_REPORT_V6.md) (P3 multi-step) · [V7](docs/TEST_REPORT_V7.md) (P3.5 hardening).
 
 ---
 
@@ -442,7 +512,9 @@ See [docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md) for the full breakdown.
 | [docs/RESUME_POINTS.md](docs/RESUME_POINTS.md) | Resume bullets + interview explanation |
 | [docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md) | Implemented / Planned / Stretch |
 | [docs/ARCHITECTURE_V2–V4.md](docs/) | Per-phase architecture deep dives |
-| [docs/TEST_REPORT_V2–V5.md](docs/) | Test results |
+| [docs/ARCHITECTURE_V6.md](docs/ARCHITECTURE_V6.md) | Multi-step workflow engine (+ P3.5 hardening) |
+| [docs/MIGRATION_P3.md](docs/MIGRATION_P3.md) | P3 migration + future OpenAI seam |
+| [docs/TEST_REPORT_V2–V7.md](docs/) | Test results |
 | [docs/OUTCOMES.md](docs/OUTCOMES.md) | SUCCESS / BLOCKED / FAILED classification |
 | [docs/INVESTIGATION_REPORT.md](docs/INVESTIGATION_REPORT.md) · [P2](docs/INVESTIGATION_REPORT_P2.md) | Demo-quality & Google reliability audits |
 

@@ -24,7 +24,7 @@
  * Field Registry (from V2): Map<fieldName, Locator> populated by the first scan.
  */
 
-import { ACTION_TYPES } from '../config/constants.js';
+import { ACTION_TYPES, DEFAULT_RESULT_LINK_SELECTOR } from '../config/constants.js';
 import config from '../config/env.js';
 import logger from '../utils/logger.js';
 import { RetryService } from '../services/RetryService.js';
@@ -114,6 +114,7 @@ export class ActionExecutor {
       const detail = action.field ? ` → "${action.field}"`
                    : action.key   ? ` [${action.key}]`
                    : action.fragment ? ` ≈ "${action.fragment}"`
+                   : action.selector ? ` (${action.selector})`
                    : action.resultsSelector || action.emptyHint ? ' (results check)'
                    : '';
       logger.plan(`[${i + 1}/${total}] ${action.type}${detail}`);
@@ -194,6 +195,22 @@ export class ActionExecutor {
       case ACTION_TYPES.PRESS_KEY:
         return this._agent.input.pressKey(action.key);
 
+      // --- Generic, site-agnostic actions (multi-step engine) ---
+      case ACTION_TYPES.WAIT_FOR_SELECTOR: {
+        const ok = await this._agent.validation.waitForSelector(action.selector);
+        if (!ok) throw new Error(`WAIT_FOR_SELECTOR: "${action.selector}" not visible`);
+        return ok;
+      }
+
+      case ACTION_TYPES.VERIFY_SELECTOR: {
+        const ok = await this._agent.validation.verifySelectorPresent(action.selector);
+        if (!ok) throw new Error(`VERIFY_SELECTOR: "${action.selector}" not present`);
+        return ok;
+      }
+
+      case ACTION_TYPES.OPEN_FIRST_RESULT:
+        return this._openFirstResult(action.selector);
+
       // --- URL verification (retryable: throw on mismatch so it can retry) ---
       case ACTION_TYPES.VERIFY_URL: {
         const ok = this._agent.validation.urlContains(action.fragment);
@@ -258,6 +275,9 @@ export class ActionExecutor {
       case ACTION_TYPES.FILL:
       case ACTION_TYPES.SEND_KEYS:
       case ACTION_TYPES.PRESS_KEY:
+      case ACTION_TYPES.WAIT_FOR_SELECTOR:
+      case ACTION_TYPES.VERIFY_SELECTOR:
+      case ACTION_TYPES.OPEN_FIRST_RESULT:
         return { retries: actionRetries, fatal: true };
 
       case ACTION_TYPES.VERIFY_URL:
@@ -289,10 +309,36 @@ export class ActionExecutor {
     if (action.field)           return `${action.type} "${action.field}"`;
     if (action.key)             return `${action.type} [${action.key}]`;
     if (action.fragment)        return `${action.type} ≈ "${action.fragment}"`;
+    if (action.selector)        return `${action.type} (${action.selector})`;
     if (action.resultsSelector) return `${action.type} (${action.resultsSelector})`;
     if (action.emptyHint)       return `${action.type} (empty: ${action.emptyHint})`;
     if (action.url)             return `${action.type} ${action.url}`;
     return action.type;
+  }
+
+  /**
+   * Click the first VISIBLE link in a results region. Generic and site-agnostic:
+   * the task supplies `selector`; otherwise a common-pattern default is used.
+   *
+   * @param {string} [selector]
+   * @returns {Promise<boolean>}
+   */
+  async _openFirstResult(selector) {
+    const sel = selector || DEFAULT_RESULT_LINK_SELECTOR;
+    const page = this._agent.getPage();
+    const locator = page.locator(sel);
+    const count = await locator.count();
+
+    for (let i = 0; i < count && i < 30; i++) {
+      const el = locator.nth(i);
+      if (await el.isVisible().catch(() => false)) {
+        await el.scrollIntoViewIfNeeded().catch(() => {});
+        logger.act(`Opening first result (match ${i + 1}/${count}) for "${sel}"`);
+        await this._agent.click.click(el);
+        return true;
+      }
+    }
+    throw new Error(`OPEN_FIRST_RESULT: no visible result link for "${sel}"`);
   }
 
   // ---------------------------------------------------------------------------

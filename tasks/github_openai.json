@@ -1,0 +1,15 @@
+{
+  "name": "github_openai",
+  "description": "Search GitHub for 'openai' and open the first repository result.",
+  "steps": [
+    { "action": "navigate", "url": "https://github.com/search" },
+    { "action": "search", "field": "search", "value": "openai" },
+    { "action": "submit" },
+    { "action": "verify_url", "fragment": "q=openai" },
+    { "action": "verify_selector", "selector": "[data-testid=\"results-list\"]" },
+    { "action": "screenshot", "label": "github-openai-results" },
+    { "action": "open_first_result", "selector": "[data-testid=\"results-list\"] a" },
+    { "action": "wait_for_selector", "selector": "main" },
+    { "action": "screenshot", "label": "github-openai-repo" }
+  ]
+}

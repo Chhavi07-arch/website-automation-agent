@@ -1,0 +1,13 @@
+{
+  "name": "hackernews_top",
+  "description": "Open the first story on the Hacker News front page.",
+  "steps": [
+    { "action": "navigate", "url": "https://news.ycombinator.com" },
+    { "action": "wait_for_selector", "selector": ".athing" },
+    { "action": "verify_selector", "selector": ".titleline" },
+    { "action": "screenshot", "label": "hn-front-page" },
+    { "action": "open_first_result", "selector": ".titleline a" },
+    { "action": "wait_for_selector", "selector": "body" },
+    { "action": "screenshot", "label": "hn-first-story" }
+  ]
+}

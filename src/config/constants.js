@@ -86,6 +86,11 @@ export const ACTION_TYPES = {
   // Keyboard
   PRESS_KEY:      'PRESS_KEY',       // page-level key press (e.g. '/', 'Enter', 'Escape')
 
+  // Generic, site-agnostic actions (used by the multi-step engine)
+  OPEN_FIRST_RESULT: 'OPEN_FIRST_RESULT', // click the first visible link in a results region
+  WAIT_FOR_SELECTOR: 'WAIT_FOR_SELECTOR', // wait until a CSS selector is visible
+  VERIFY_SELECTOR:   'VERIFY_SELECTOR',   // assert a CSS selector is present/visible
+
   // Utilities
   SCREENSHOT:     'SCREENSHOT',
   WAIT:           'WAIT',            // sleep for N ms
@@ -111,5 +116,14 @@ export const ACTION_TYPES = {
     FILL_SHADCN_FORM: 'FILL_SHADCN_FORM',  // fill the shadcn React Hook Form demo
     SEARCH_GOOGLE:    'SEARCH_GOOGLE',      // navigate to Google and search for a query
     SEARCH_GITHUB:    'SEARCH_GITHUB',      // navigate to GitHub and search for a query
+    MULTI_STEP:       'MULTI_STEP',         // execute a reusable task definition from a JSON file
   },
 };
+
+/**
+ * Generic, site-agnostic fallback used by OPEN_FIRST_RESULT when a task does not
+ * supply its own `selector`. Covers the most common results-list / result-link
+ * patterns. Site-specific selectors belong in task JSON, not here.
+ */
+export const DEFAULT_RESULT_LINK_SELECTOR =
+  '[data-testid="results-list"] a, #search a, #rso a, #links a, main a[href]';

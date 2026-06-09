@@ -29,12 +29,17 @@ A clear separation of what exists today, what is planned next, and the ambitious
 
 ---
 
+## ✅ Delivered after the original roadmap (P1–P3)
+
+- **Honest verification & outcomes** (P1/P2): `q=query` + results checks, CAPTCHA/consent → **BLOCKED**, SUCCESS/BLOCKED/FAILED with exit codes.
+- **Multi-step workflow engine** (P3): reusable **JSON task files** run via `GOAL=MULTI_STEP` — generic `navigate/search/submit/open_first_result/…` verbs, no per-task code. *(This delivered the "generic config-driven form filling" and "multi-step workflows" items below.)*
+
 ## 🔜 Planned (next, no architecture rewrite needed)
 
 | Feature | Approach | Touches |
 |---------|----------|---------|
-| **Generic config-driven form filling** | Read field→value pairs from a JSON/`.env` map; a single `FillFormWorkflow` handles any form | new workflow + planner method |
-| **Multi-page / multi-step workflows** | Chain navigations within one plan (e.g. login → dashboard → action) | planner only |
+| **HTML run report** | Render each run's plan, logs, and screenshots into a single `report.html` | new util |
+| **More task verbs / per-step retry overrides** | Extend the `_planMultiStep` mapping; allow a task step to set its own retry/fatal | planner + executor policy |
 | **HTML run report** | Render each run's plan, logs, and screenshots into a single `report.html` | new util |
 | **Retry jitter & per-action overrides** | Add randomised jitter; allow a plan step to specify its own retry count | `RetryService` + executor policy |
 | **`SEARCH_BING` / more search engines** | Demonstrates the registry extension pattern | 1 goal + 1 planner method + 1 register |

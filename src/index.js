@@ -19,11 +19,12 @@
 import readline from 'node:readline';
 import { Agent }                 from './agent/Agent.js';
 import { writeDiagnosticReport } from './utils/diagnostics.js';
+import { writeRunReport }        from './utils/report.js';
 import { sleep }                 from './utils/fileHelper.js';
 import { BlockedError }          from './utils/errors.js';
 import { ACTION_TYPES }          from './config/constants.js';
 import config                    from './config/env.js';
-import logger                    from './utils/logger.js';
+import logger, { getLogBuffer, clearLogBuffer } from './utils/logger.js';
 
 const { OUTCOMES } = ACTION_TYPES;
 
@@ -44,6 +45,12 @@ async function main() {
   const agent = new Agent();
   const goalKey = config.target.goal;
   let workflow = null;
+
+  // Run-report bookkeeping (P3.5).
+  clearLogBuffer();
+  const startTime = Date.now();
+  let outcome = OUTCOMES.SUCCESS;
+  let blockedReason = null;
 
   try {
     // --- Initialise: launches browser, wires tools, planner, router ---
@@ -68,6 +75,8 @@ async function main() {
 
     if (error instanceof BlockedError) {
       // --- OUTCOME: BLOCKED (the website stopped us — NOT a bug) ---
+      outcome = OUTCOMES.BLOCKED;
+      blockedReason = error.blockedReason;
       logger.warn('══════════════════════════════════════════════');
       logger.warn('🛑 OUTCOME: BLOCKED — Workflow blocked by anti-bot protection.');
       logger.warn(`🛑 Reason: ${error.blockedReason}`);
@@ -86,6 +95,7 @@ async function main() {
       process.exitCode = 2;   // distinct from FAILED (1) and SUCCESS (0)
     } else {
       // --- OUTCOME: FAILED (a real failure / bug) ---
+      outcome = OUTCOMES.FAILED;
       logger.error('══════════════════════════════════════════════');
       logger.error(`❌ OUTCOME: FAILED — ${error.message}`);
       logger.error('══════════════════════════════════════════════');
@@ -102,6 +112,10 @@ async function main() {
       process.exitCode = 1;
     }
   } finally {
+    // Capture the final URL before the browser closes (for the report).
+    let finalUrl = '';
+    try { finalUrl = agent.navigation.currentUrl(); } catch { /* page may be gone */ }
+
     // --- Demo Mode: let the examiner inspect the final state before teardown ---
     if (config.demo.keepBrowserOpen && !config.browser.headless) {
       logger.info('🖐  Browser left open for manual inspection.');
@@ -114,6 +128,21 @@ async function main() {
     }
 
     await agent.shutdown();
+
+    // --- Self-contained HTML run report (P3.5) ---
+    if (config.report.enabled) {
+      const taskName = goalKey === ACTION_TYPES.GOALS.MULTI_STEP ? config.task.file : goalKey;
+      writeRunReport({
+        goal: goalKey,
+        taskName,
+        outcome,
+        blockedReason,
+        startTime,
+        endTime: Date.now(),
+        finalUrl,
+        logBuffer: getLogBuffer(),
+      });
+    }
   }
 }
 

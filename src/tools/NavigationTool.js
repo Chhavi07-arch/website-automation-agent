@@ -78,9 +78,16 @@ export class NavigationTool {
    */
   async waitForNetworkIdle() {
     logger.think('Waiting for network to become idle');
-    await this._page.waitForLoadState('networkidle', {
-      timeout: config.timeouts.pageLoad,
-    });
-    logger.observe('Network is idle');
+    // networkidle is a soft "settle" heuristic — many real pages never reach it
+    // (analytics, websockets, anti-bot challenges). Treat a timeout as a warning,
+    // not a failure, so a non-idling page does not abort the whole workflow.
+    try {
+      await this._page.waitForLoadState('networkidle', {
+        timeout: config.timeouts.element,
+      });
+      logger.observe('Network is idle');
+    } catch {
+      logger.warn('Network did not reach idle within timeout — continuing anyway');
+    }
   }
 }

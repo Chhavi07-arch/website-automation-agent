@@ -1,0 +1,15 @@
+{
+  "name": "github_playwright",
+  "description": "Search GitHub for 'playwright' and open the first repository result.",
+  "steps": [
+    { "action": "navigate", "url": "https://github.com/search" },
+    { "action": "search", "field": "search", "value": "playwright" },
+    { "action": "submit" },
+    { "action": "verify_url", "fragment": "q=playwright" },
+    { "action": "verify_selector", "selector": "[data-testid=\"results-list\"]" },
+    { "action": "screenshot", "label": "github-playwright-results" },
+    { "action": "open_first_result", "selector": "[data-testid=\"results-list\"] a" },
+    { "action": "wait_for_selector", "selector": "main" },
+    { "action": "screenshot", "label": "github-playwright-repo" }
+  ]
+}

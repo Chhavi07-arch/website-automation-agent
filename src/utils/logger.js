@@ -18,12 +18,44 @@
  */
 
 import winston from 'winston';
+import Transport from 'winston-transport';
 import path from 'path';
 import { ensureDir } from './fileHelper.js';
 import config from '../config/env.js';
 
 const LOGS_DIR = path.resolve('logs');
 ensureDir(LOGS_DIR);
+
+// ---------------------------------------------------------------------------
+// In-memory log buffer (used by the HTML run report — see utils/report.js)
+// ---------------------------------------------------------------------------
+
+const LOG_BUFFER = [];
+const LOG_BUFFER_MAX = 5000;
+
+/** Returns a shallow copy of the captured log records for this process. */
+export function getLogBuffer() {
+  return LOG_BUFFER.slice();
+}
+
+/** Clears the buffer (call at the start of a run). */
+export function clearLogBuffer() {
+  LOG_BUFFER.length = 0;
+}
+
+/**
+ * A passive Winston transport that records every log record into LOG_BUFFER.
+ * No formatting/colour — stores the raw level + message so the report can parse
+ * it. This is how the report captures retry/recovery/screenshot/step events
+ * without any change to the executor or tools.
+ */
+class MemoryTransport extends Transport {
+  log(info, callback) {
+    LOG_BUFFER.push({ level: info.level, message: String(info.message), t: Date.now() });
+    if (LOG_BUFFER.length > LOG_BUFFER_MAX) LOG_BUFFER.shift();
+    callback();
+  }
+}
 
 // Extend default levels with OTAV + planning levels.
 // Lower numeric value = higher severity in Winston's convention.
@@ -74,6 +106,8 @@ const fileFormat = winston.format.combine(
 
 const transports = [
   new winston.transports.Console({ format: consoleFormat }),
+  // Capture everything in memory for the HTML run report (level 'debug' = all).
+  new MemoryTransport({ level: 'debug' }),
 ];
 
 if (config.logging.toFile) {

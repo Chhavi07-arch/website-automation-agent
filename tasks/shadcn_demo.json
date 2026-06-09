@@ -1,0 +1,12 @@
+{
+  "name": "shadcn_demo",
+  "description": "Fill the shadcn React Hook Form demo (username + description) with realistic values.",
+  "steps": [
+    { "action": "navigate", "url": "https://ui.shadcn.com/docs/forms/react-hook-form" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "scroll", "direction": "down", "pixels": 600 },
+    { "action": "fill", "field": "name", "value": "chhavi_ahlawat" },
+    { "action": "fill", "field": "description", "value": "A first-year CS student building browser automation agents." },
+    { "action": "screenshot", "label": "shadcn-demo-filled" }
+  ]
+}
