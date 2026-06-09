@@ -47,16 +47,29 @@ export class BrowserManager {
       );
     }
 
+    // Demo Mode slows actions slightly so each step is watchable on screen.
+    const slowMo = config.demo.enabled
+      ? Math.max(config.browser.slowMo, 150)
+      : config.browser.slowMo;
+
+    if (config.demo.enabled) {
+      logger.info(`🎬 DEMO MODE on — actions slowed (slowMo=${slowMo}ms), screenshots kept`);
+    }
     logger.info(`Launching ${browserType} browser (headless=${config.browser.headless})`);
 
     this._browser = await launcher.launch({
       headless: config.browser.headless,
-      slowMo: config.browser.slowMo,
+      slowMo,
     });
 
+    // A realistic context (locale + desktop UA + Accept-Language) makes the
+    // agent look less like a bot, which materially reduces anti-bot walls
+    // (e.g. Google CAPTCHA). See INVESTIGATION_REPORT_P2.md.
     this._context = await this._browser.newContext({
       viewport: VIEWPORT,
-      // Future: add userAgent, locale, permissions here for Phase 3+
+      locale: config.browser.locale,
+      ...(config.browser.userAgent ? { userAgent: config.browser.userAgent } : {}),
+      extraHTTPHeaders: { 'Accept-Language': `${config.browser.locale},en;q=0.9` },
     });
 
     this._page = await this._context.newPage();

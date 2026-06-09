@@ -30,9 +30,11 @@ const ERRORS_DIR = path.resolve('logs', 'errors');
  * @param {string}  ctx.workflow      - The workflow class name.
  * @param {object?} ctx.failedAction  - The action descriptor that failed (if known).
  * @param {Error}   ctx.error         - The thrown error.
+ * @param {string}  [ctx.outcome]     - Execution outcome: 'BLOCKED' | 'FAILED'.
+ * @param {string?} [ctx.blockedReason] - If BLOCKED, why (e.g. 'CAPTCHA').
  * @returns {Promise<string|null>} Path to the report file, or null on failure.
  */
-export async function writeDiagnosticReport(agent, { goal, workflow, failedAction, error }) {
+export async function writeDiagnosticReport(agent, { goal, workflow, failedAction, error, outcome, blockedReason }) {
   try {
     ensureDir(ERRORS_DIR);
 
@@ -49,6 +51,8 @@ export async function writeDiagnosticReport(agent, { goal, workflow, failedActio
     const report = {
       goal,
       workflow,
+      outcome: outcome ?? 'FAILED',
+      blockedReason: blockedReason ?? null,
       failedAction: failedAction?.type ?? null,
       failedActionDetail: failedAction ?? null,
       url,
@@ -74,7 +78,13 @@ export async function writeDiagnosticReport(agent, { goal, workflow, failedActio
     existing.push(report);
     fs.writeFileSync(file, JSON.stringify(existing, null, 2));
 
-    logger.error(`[DIAGNOSTIC] Failure report written → ${file}`);
+    // Word the log by outcome: a BLOCKED run is not a failure, so don't call it one.
+    const resolvedOutcome = report.outcome;
+    if (resolvedOutcome === 'BLOCKED') {
+      logger.warn(`[DIAGNOSTIC] BLOCKED report written → ${file}`);
+    } else {
+      logger.error(`[DIAGNOSTIC] ${resolvedOutcome} report written → ${file}`);
+    }
     return file;
   } catch (err) {
     logger.error(`[DIAGNOSTIC] Failed to write diagnostic report: ${err.message}`);

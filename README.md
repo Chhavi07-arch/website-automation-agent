@@ -156,6 +156,11 @@ flowchart TB
 - **Automatic retries** with exponential backoff (500 → 1000 → 2000 ms), configurable.
 - **Self-healing recovery ladder** for field detection (scroll & re-scan → full re-scan → diagnostic).
 - **Diagnostic Mode** — failures write a JSON report with screenshot, URL, page title, failed action, and timestamp.
+- **Strong, honest verification** — searches verify the query is in the URL **and** that results (or an empty-state) actually rendered, so a "success" can't be a false positive.
+- **Outcome classification** — every run ends as **SUCCESS / BLOCKED / FAILED** with a clear banner and distinct exit code (0 / 2 / 1).
+- **Anti-bot (blocked) detection** — CAPTCHA / consent / "unusual traffic" pages are reported as **BLOCKED**, never as a fake success or a generic crash.
+- **Detection confidence logging** — every match is tagged HIGH / MEDIUM / LOW so you can see the agent chose a real field, not an arbitrary one.
+- **Demo Mode** — `DEMO_MODE`, `DEMO_PAUSE_MS`, `KEEP_BROWSER_OPEN` keep the browser open and paced for live viva/recruiter demos.
 - **Timestamped screenshots** at every key step.
 - **Zero hardcoded brittle selectors** in the happy path.
 
@@ -166,8 +171,8 @@ flowchart TB
 | Goal | What it does | Detection highlight |
 |------|--------------|---------------------|
 | `FILL_SHADCN_FORM` | Fills the shadcn React Hook Form demo (name + description) and verifies values | Accessible `<label>` matching |
-| `SEARCH_GOOGLE` | Searches Google for a query and verifies the results URL | ARIA searchbox / `name="q"` |
-| `SEARCH_GITHUB` | Searches GitHub via `/search` and verifies the results URL | Visible-input filtering past hidden header button |
+| `SEARCH_GOOGLE` | Searches Google; detects CAPTCHA/consent walls → **BLOCKED**; else verifies `q=<query>` + results rendered | ARIA searchbox / `name="q"` |
+| `SEARCH_GITHUB` | Searches GitHub via `/search`; verifies `q=<query>` in the URL **and** that results rendered | Visible-input filtering past hidden header button |
 
 Example (shadcn) plan, logged before anything runs:
 
@@ -252,14 +257,20 @@ cp .env.example .env
 | `GOAL` | `FILL_SHADCN_FORM` | Which workflow to run |
 | `HEADLESS` | `false` | Hide the browser window |
 | `SLOW_MO` | `50` | Per-action delay (ms) for readable demos |
+| `BROWSER_LOCALE` | `en-US` | UI locale (realistic locale reduces anti-bot walls) |
+| `BROWSER_UA` | desktop Chrome UA | User-Agent; set empty to use Playwright's default |
 | `PAGE_LOAD_TIMEOUT` | `30000` | Navigation timeout (ms) |
 | `ELEMENT_TIMEOUT` | `10000` | Per-element wait (ms) |
-| `FORM_NAME` / `FORM_DESCRIPTION` | — | Values for the shadcn form |
+| `USERNAME` | `chhavi_ahlawat` | Value for the shadcn **username** field (the "name" field is really a username) |
+| `FORM_DESCRIPTION` | student bio | Value for the shadcn description textarea |
 | `GOOGLE_QUERY` / `GITHUB_QUERY` | — | Search queries |
 | `RETRY_COUNT` | `3` | Max attempts for retryable actions |
 | `NAV_RETRY_COUNT` | `2` | Max NAVIGATE attempts (bounded) |
 | `RETRY_BASE_DELAY_MS` | `500` | First backoff; doubles each attempt |
 | `LOG_LEVEL` | `info` | Logger verbosity |
+| `DEMO_MODE` | `false` | Slow actions slightly + clear banners |
+| `DEMO_PAUSE_MS` | `0` | Hold N ms before closing so results stay visible |
+| `KEEP_BROWSER_OPEN` | `false` | Leave the browser open until you press Enter |
 
 ---
 
@@ -280,15 +291,32 @@ Or set the goal inline:
 GOAL=SEARCH_GITHUB npm start
 ```
 
+### 🎬 Demo Mode (for viva / recruiter demos)
+
+Keep the browser open and paced so a viewer can confirm the result:
+
+```bash
+# Recommended combo — slows actions, holds, and waits for Enter before closing:
+DEMO_MODE=true DEMO_PAUSE_MS=5000 KEEP_BROWSER_OPEN=true npm run github
+```
+
+- `DEMO_MODE=true` — slows actions slightly and prints clear `🎬` banners.
+- `DEMO_PAUSE_MS=5000` — holds 5s before closing so results stay on screen.
+- `KEEP_BROWSER_OPEN=true` — leaves the browser open until you press **Enter** (`🖐  Browser left open for manual inspection.`).
+
+All three default to OFF, so normal runs are unchanged.
+
 ---
 
 ## 🧪 Testing
 
 ```bash
-npm test             # runs the deterministic resilience suite
+npm test             # resilience + GitHub verification + Google outcome suites
 ```
 
-The suite (`tests/resilience.test.mjs`) drives the real `ActionExecutor` against controlled `data:` URL pages to prove retry + recovery behaviour without depending on live websites:
+All suites drive the real `ActionExecutor` against controlled `data:` URL pages — deterministic, no live websites needed.
+
+**Resilience** (`tests/resilience.test.mjs`) — retry + recovery:
 
 | Scenario | Proves |
 |----------|--------|
@@ -296,7 +324,26 @@ The suite (`tests/resilience.test.mjs`) drives the real `ActionExecutor` against
 | **D — Missing field** | Distinguishes "no form" vs "wrong field"; same resilient handling |
 | **E — Hidden initially** | **Self-heals** — waits via backoff, re-scans, finds late-rendered field |
 
-Full results (incl. normal + slow-page-load runs): [docs/TEST_REPORT_V3.md](docs/TEST_REPORT_V3.md).
+**Verification** (`tests/github-verification.test.mjs`) — proves a search "success" is real:
+
+| Scenario | Proves |
+|----------|--------|
+| **1 — Successful search** | results container present → passes |
+| **2 — Zero-result search** | empty-state present → passes (the search *did* run) |
+| **3 — Query in URL** | `q=playwright` present → passes |
+| **4 — Failed submission** | no `q=`, no results → **fails** (false positive removed) |
+
+**Google outcomes** (`tests/google-verification.test.mjs`) — SUCCESS / BLOCKED / FAILED classification:
+
+| Scenario | Proves |
+|----------|--------|
+| **1 — Successful search** | results + `q=` → SUCCESS |
+| **2 — Consent page** | consent wall → BLOCKED |
+| **3 — CAPTCHA page** | reCAPTCHA → BLOCKED |
+| **4 — Unusual traffic** | "unusual traffic" → BLOCKED |
+| **5 — Normal failure** | no results, not blocked → FAILED |
+
+Full results: [V3](docs/TEST_REPORT_V3.md) (resilience) · [V4](docs/TEST_REPORT_V4.md) (P1 fixes) · [V5](docs/TEST_REPORT_V5.md) (P2 Google).
 
 ---
 
@@ -316,6 +363,25 @@ flowchart TD
 ```
 
 Retries use **exponential backoff** between attempts (500 ms → 1000 ms). Navigation is retried a **bounded** number of times (never indefinitely). Verification actions (`VERIFY_URL`) retry to give slow pages time but never crash the workflow.
+
+---
+
+## 🎯 Outcome Classification
+
+Every run ends as exactly one outcome — so a viewer can instantly tell *worked* vs *blocked by the site* vs *bug*, **by banner and exit code, without reading source**:
+
+| Outcome | Banner | Exit | When |
+|---------|--------|------|------|
+| **SUCCESS** | `✅ OUTCOME: SUCCESS` | `0` | task completed and verified |
+| **BLOCKED** | `🛑 OUTCOME: BLOCKED — anti-bot protection` | `2` | CAPTCHA / consent / "unusual traffic" |
+| **FAILED** | `❌ OUTCOME: FAILED` | `1` | navigation exhausted, field not found, bug |
+
+A CAPTCHA is reported as **BLOCKED** — never a fake SUCCESS, never a generic crash. The Google workflow runs a `CHECK_BLOCKED` step that throws a typed `BlockedError`; `index.js` classifies it. Full details: [docs/OUTCOMES.md](docs/OUTCOMES.md).
+
+```
+🛑 OUTCOME: BLOCKED — Workflow blocked by anti-bot protection.
+🛑 Reason: CAPTCHA
+```
 
 ---
 
@@ -376,7 +442,9 @@ See [docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md) for the full breakdown.
 | [docs/RESUME_POINTS.md](docs/RESUME_POINTS.md) | Resume bullets + interview explanation |
 | [docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md) | Implemented / Planned / Stretch |
 | [docs/ARCHITECTURE_V2–V4.md](docs/) | Per-phase architecture deep dives |
-| [docs/TEST_REPORT_V2–V3.md](docs/) | Test results |
+| [docs/TEST_REPORT_V2–V5.md](docs/) | Test results |
+| [docs/OUTCOMES.md](docs/OUTCOMES.md) | SUCCESS / BLOCKED / FAILED classification |
+| [docs/INVESTIGATION_REPORT.md](docs/INVESTIGATION_REPORT.md) · [P2](docs/INVESTIGATION_REPORT_P2.md) | Demo-quality & Google reliability audits |
 
 ---
 

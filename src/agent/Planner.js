@@ -150,11 +150,17 @@ export class Planner {
   _planSearchGoogle({ query }) {
     if (!query) throw new Error('Planner: SEARCH_GOOGLE requires params.query');
 
+    // First token of the query — robust for the q=<query> URL check across
+    // Google's `+`/encoding differences (e.g. "Playwright browser…" → "q=Playwright").
+    const firstToken = query.trim().split(/\s+/)[0];
+
     return [
       // --- Load Google homepage ---
       { type: ACTION_TYPES.NAVIGATE,      url: 'https://www.google.com' },
       { type: ACTION_TYPES.SCREENSHOT,    label: 'google-loaded' },
       { type: ACTION_TYPES.WAIT_FOR_IDLE },
+      // A consent wall can appear on landing → catch it as BLOCKED, not a bug.
+      { type: ACTION_TYPES.CHECK_BLOCKED },
 
       // --- Find and fill the search box ---
       { type: ACTION_TYPES.DETECT_FIELD,  field: 'search' },
@@ -162,12 +168,25 @@ export class Planner {
       { type: ACTION_TYPES.FILL,          field: 'search', value: query },
       { type: ACTION_TYPES.SCREENSHOT,    label: 'google-query-typed' },
 
-      // --- Submit and wait for results page ---
+      // --- Submit and wait for the results page ---
       { type: ACTION_TYPES.PRESS_KEY,     key: 'Enter' },
-      { type: ACTION_TYPES.WAIT,          ms: 1000 },   // let navigation start
+      { type: ACTION_TYPES.WAIT,          ms: 1500 },
       { type: ACTION_TYPES.WAIT_FOR_IDLE },
       { type: ACTION_TYPES.SCREENSHOT,    label: 'google-results' },
-      { type: ACTION_TYPES.VERIFY_URL,    fragment: 'google.com/search' },
+
+      // --- Classify the outcome (order matters) ---
+      // 1. BLOCKED? A /sorry CAPTCHA page also contains "google.com/search" in
+      //    its continue= param, so we MUST check for the block BEFORE trusting URL.
+      { type: ACTION_TYPES.CHECK_BLOCKED },
+      // 2. Did the query actually get submitted? (hard gate)
+      { type: ACTION_TYPES.VERIFY_URL,     fragment: `q=${firstToken}`, fatal: true },
+      // 3. Did real results render? (hard gate — content, not just URL)
+      {
+        type: ACTION_TYPES.VERIFY_RESULTS,
+        resultsSelector: '#search, #rso, #result-stats',
+        emptyHint: 'did not match any documents|no results found',
+        fatal: true,
+      },
     ];
   }
 
@@ -209,7 +228,19 @@ export class Planner {
       { type: ACTION_TYPES.WAIT,          ms: 1500 },
       { type: ACTION_TYPES.WAIT_FOR_IDLE },
       { type: ACTION_TYPES.SCREENSHOT,    label: 'github-results' },
-      { type: ACTION_TYPES.VERIFY_URL,    fragment: 'github.com/search' },
+
+      // --- STRONG verification (replaces the old always-true /search check) ---
+      // 1. The query must appear in the URL — proves the search was submitted,
+      //    not just that we landed on the /search page. Hard gate (fatal).
+      { type: ACTION_TYPES.VERIFY_URL,    fragment: `q=${encodeURIComponent(query)}`, fatal: true },
+      // 2. Results must have actually rendered — either a results list OR a
+      //    recognised empty-state. Both prove the search executed. Hard gate.
+      {
+        type: ACTION_TYPES.VERIFY_RESULTS,
+        resultsSelector: '[data-testid="results-list"]',
+        emptyHint: "couldn'?t find any|we couldn'?t find|no results",
+        fatal: true,
+      },
     ];
   }
 
@@ -251,7 +282,11 @@ export class Planner {
       case ACTION_TYPES.PRESS_KEY:
         return `Press key [${step.key}]`;
       case ACTION_TYPES.VERIFY_URL:
-        return `Verify URL contains "${step.fragment}"`;
+        return `Verify URL contains "${step.fragment}"${step.fatal ? ' (hard gate)' : ''}`;
+      case ACTION_TYPES.VERIFY_RESULTS:
+        return `Verify results rendered (selector or empty-state)${step.fatal ? ' (hard gate)' : ''}`;
+      case ACTION_TYPES.CHECK_BLOCKED:
+        return 'Check for anti-bot wall (CAPTCHA / consent) → BLOCKED if present';
       default:
         return step.type;
     }

@@ -28,6 +28,7 @@ import { ACTION_TYPES } from '../config/constants.js';
 import config from '../config/env.js';
 import logger from '../utils/logger.js';
 import { RetryService } from '../services/RetryService.js';
+import { BlockedError } from '../utils/errors.js';
 
 export class ActionExecutor {
   /**
@@ -80,11 +81,18 @@ export class ActionExecutor {
         },
       );
     } catch (err) {
-      if (policy.fatal) {
+      // A plan step may override fatality: `fatal: true` forces a crash even on
+      // a normally-soft action (used to make GitHub's q=query/results checks
+      // hard gates); `fatal: false` forces a soft warning.
+      const fatal = action.fatal === true ? true
+                  : action.fatal === false ? false
+                  : policy.fatal;
+
+      if (fatal) {
         err.failedAction = action;   // tag for diagnostics
         throw err;
       }
-      // Non-fatal (e.g. VERIFY_URL): exhausting retries is a warning, not a crash.
+      // Non-fatal (e.g. Google VERIFY_URL): exhausting retries warns, not crashes.
       logger.warn(`Non-fatal action "${action.type}" failed after retries: ${err.message}`);
       return false;
     }
@@ -106,6 +114,7 @@ export class ActionExecutor {
       const detail = action.field ? ` → "${action.field}"`
                    : action.key   ? ` [${action.key}]`
                    : action.fragment ? ` ≈ "${action.fragment}"`
+                   : action.resultsSelector || action.emptyHint ? ' (results check)'
                    : '';
       logger.plan(`[${i + 1}/${total}] ${action.type}${detail}`);
       results.push(await this.execute(action));
@@ -194,6 +203,29 @@ export class ActionExecutor {
         return ok;
       }
 
+      // --- Blocked-state check (run once; throws a typed BlockedError) ---
+      // Not retried: a CAPTCHA/consent wall will not clear on its own, so retrying
+      // is pointless. The BlockedError propagates so index.js reports BLOCKED.
+      case ACTION_TYPES.CHECK_BLOCKED: {
+        const { blocked, reason } = await this._agent.validation.verifyBlockedState();
+        if (blocked) {
+          throw new BlockedError(reason);
+        }
+        return true;
+      }
+
+      // --- Results verification (retryable: throw if neither results nor empty-state) ---
+      case ACTION_TYPES.VERIFY_RESULTS: {
+        const ok = await this._agent.validation.verifyResultsRendered({
+          resultsSelector: action.resultsSelector,
+          emptyHint: action.emptyHint,
+        });
+        if (!ok) {
+          throw new Error('results region not rendered yet (search may not have executed)');
+        }
+        return ok;
+      }
+
       // --- Utilities ---
       case ACTION_TYPES.SCREENSHOT:
         return this._agent.screenshot.capture(action.label || '');
@@ -229,8 +261,14 @@ export class ActionExecutor {
         return { retries: actionRetries, fatal: true };
 
       case ACTION_TYPES.VERIFY_URL:
-        // Retry to give slow pages time, but never crash the workflow.
+        // Retry to give slow pages time. Soft by default (Google), but a plan
+        // step can set `fatal: true` to make it a hard gate (GitHub q=query).
         return { retries: actionRetries, fatal: false };
+
+      case ACTION_TYPES.VERIFY_RESULTS:
+        // Retry to give results time to render; fatal so a search that never
+        // executed is reported as a real failure (removes false positives).
+        return { retries: actionRetries, fatal: true };
 
       case ACTION_TYPES.NAVIGATE:
         // Bounded — navigation must NOT retry indefinitely.
@@ -248,10 +286,12 @@ export class ActionExecutor {
    * @returns {string}
    */
   _label(action) {
-    if (action.field)    return `${action.type} "${action.field}"`;
-    if (action.key)      return `${action.type} [${action.key}]`;
-    if (action.fragment) return `${action.type} ≈ "${action.fragment}"`;
-    if (action.url)      return `${action.type} ${action.url}`;
+    if (action.field)           return `${action.type} "${action.field}"`;
+    if (action.key)             return `${action.type} [${action.key}]`;
+    if (action.fragment)        return `${action.type} ≈ "${action.fragment}"`;
+    if (action.resultsSelector) return `${action.type} (${action.resultsSelector})`;
+    if (action.emptyHint)       return `${action.type} (empty: ${action.emptyHint})`;
+    if (action.url)             return `${action.type} ${action.url}`;
     return action.type;
   }
 

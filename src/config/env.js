@@ -43,6 +43,21 @@ const config = {
     headless: parseBool(process.env.HEADLESS, false),
     /** Slow down Playwright actions by this many ms (useful for demos) */
     slowMo: parseInt_(process.env.SLOW_MO, 50),
+    /**
+     * Browser UI locale. A realistic locale reduces anti-bot triggers
+     * (e.g. Google's CAPTCHA/consent walls). Set BROWSER_LOCALE to override.
+     */
+    locale: process.env.BROWSER_LOCALE || 'en-US',
+    /**
+     * User-Agent string. A realistic desktop UA reduces anti-bot triggers
+     * (the default headless UA contains "HeadlessChrome", a strong bot signal).
+     * Set BROWSER_UA='' to fall back to Playwright's default.
+     */
+    userAgent:
+      process.env.BROWSER_UA !== undefined
+        ? process.env.BROWSER_UA
+        : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+          '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   },
 
   timeouts: {
@@ -55,12 +70,18 @@ const config = {
   },
 
   form: {
-    /** Value to type into any "name" field found on the page */
-    name: process.env.FORM_NAME || 'Jane Doe',
-    /** Value to type into any "description" field found on the page */
+    /**
+     * Value typed into the shadcn "name" field.
+     * NOTE: on the shadcn demo this field is actually the *username* input
+     * (label "Username"), so the value should look like a username, not a
+     * full name. `USERNAME` is the canonical var; `FORM_NAME` is kept as a
+     * backward-compatible fallback.
+     */
+    username: process.env.USERNAME || process.env.FORM_NAME || 'chhavi_ahlawat',
+    /** Value typed into the "description" textarea — a believable bio. */
     description:
       process.env.FORM_DESCRIPTION ||
-      'This is an automated description filled by the Website Automation Agent.',
+      'A first-year CS student building browser automation agents.',
   },
 
   target: {
@@ -97,6 +118,15 @@ const config = {
     level: process.env.LOG_LEVEL || 'info',
     /** Whether to write logs to files in addition to the console */
     toFile: parseBool(process.env.LOG_TO_FILE, true),
+  },
+
+  demo: {
+    /** Master demo switch — slows actions slightly and prints clear banners. */
+    enabled: parseBool(process.env.DEMO_MODE, false),
+    /** If > 0, pause this many ms before finishing so results stay on screen. */
+    pauseMs: parseInt_(process.env.DEMO_PAUSE_MS, 0),
+    /** If true, do NOT auto-close the browser — wait for the user to press Enter. */
+    keepBrowserOpen: parseBool(process.env.KEEP_BROWSER_OPEN, false),
   },
 };
 

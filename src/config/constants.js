@@ -80,6 +80,8 @@ export const ACTION_TYPES = {
   DETECT_FIELD:   'DETECT_FIELD',    // resolve a named field → locator, cache in registry
   VERIFY_FIELD:   'VERIFY_FIELD',    // assert a field's current value equals expected
   VERIFY_URL:     'VERIFY_URL',      // assert current URL contains a fragment
+  VERIFY_RESULTS: 'VERIFY_RESULTS',  // assert a results region OR an empty-state rendered
+  CHECK_BLOCKED:  'CHECK_BLOCKED',   // throw BlockedError if a CAPTCHA/consent wall is present
 
   // Keyboard
   PRESS_KEY:      'PRESS_KEY',       // page-level key press (e.g. '/', 'Enter', 'Escape')
@@ -87,6 +89,19 @@ export const ACTION_TYPES = {
   // Utilities
   SCREENSHOT:     'SCREENSHOT',
   WAIT:           'WAIT',            // sleep for N ms
+
+  /**
+   * Execution outcomes — how a workflow run ended. This is a result category,
+   * NOT an architectural layer.
+   *   SUCCESS — the task completed and was verified.
+   *   BLOCKED — the website blocked automation (CAPTCHA / consent / unusual traffic).
+   *   FAILED  — a real failure (navigation exhausted, field never found, bug).
+   */
+  OUTCOMES: {
+    SUCCESS: 'SUCCESS',
+    BLOCKED: 'BLOCKED',
+    FAILED:  'FAILED',
+  },
 
   /**
    * Named goal identifiers passed to GoalRouter.route() and Planner.generatePlan().

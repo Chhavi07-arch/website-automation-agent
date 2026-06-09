@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node tests/resilience.test.mjs",
+    "test": "node tests/resilience.test.mjs && node tests/github-verification.test.mjs && node tests/google-verification.test.mjs",
     "shadcn": "cross-env GOAL=FILL_SHADCN_FORM node src/index.js",
     "google": "cross-env GOAL=SEARCH_GOOGLE node src/index.js",
     "github": "cross-env GOAL=SEARCH_GITHUB node src/index.js",

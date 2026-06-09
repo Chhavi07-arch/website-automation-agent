@@ -119,25 +119,33 @@ export class ElementDetectionService {
   async findElement(hints) {
     logger.think(`Resolving element — hints: ${JSON.stringify(hints)}`);
 
+    // Confidence reflects how trustworthy the winning strategy is:
+    //   HIGH   — accessible label or ARIA role (semantic, stable)
+    //   MEDIUM — placeholder or name attribute (decent, but weaker signals)
+    //   LOW    — raw CSS selector (structural; may match an arbitrary element)
     if (hints.label) {
       const el = await this.findByLabel(hints.label);
-      if (el) return el;
+      if (el) { logger.think('Detection confidence: HIGH (accessible label)'); return el; }
     }
     if (hints.role) {
       const el = await this.findByRole(hints.role, hints.roleName);
-      if (el) return el;
+      if (el) { logger.think('Detection confidence: HIGH (ARIA role)'); return el; }
     }
     if (hints.placeholder) {
       const el = await this.findByPlaceholder(hints.placeholder);
-      if (el) return el;
+      if (el) { logger.think('Detection confidence: MEDIUM (placeholder)'); return el; }
     }
     if (hints.name) {
       const el = await this.findByName(hints.name);
-      if (el) return el;
+      if (el) { logger.think('Detection confidence: MEDIUM (name attribute)'); return el; }
     }
     if (hints.css) {
       const el = await this.findByCss(hints.css);
-      if (el) return el;
+      if (el) {
+        logger.warn('[WARN] Using LOW-confidence fallback locator (CSS selector) — may select an arbitrary element');
+        logger.think('Detection confidence: LOW (CSS fallback)');
+        return el;
+      }
     }
 
     logger.warn(`Could not locate element with hints: ${JSON.stringify(hints)}`);

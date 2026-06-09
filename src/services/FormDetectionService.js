@@ -115,17 +115,17 @@ export class FormDetectionService {
           .toLowerCase();
 
         if (!fields.search && (type === 'search' || SEARCH_FIELD_HINTS.some((h) => combined.includes(h)))) {
-          logger.think(`Classified input[${i}] as "search" via metadata scan`);
+          logger.think(`Classified input[${i}] as "search" via metadata scan — confidence: MEDIUM`);
           fields.search = el;
         } else if (!fields.name && NAME_FIELD_HINTS.some((h) => combined.includes(h))) {
-          logger.think(`Classified input[${i}] as "name" via metadata scan`);
+          logger.think(`Classified input[${i}] as "name" via metadata scan — confidence: MEDIUM`);
           fields.name = el;
         } else if (!fields.description && DESCRIPTION_FIELD_HINTS.some((h) => combined.includes(h))) {
-          logger.think(`Classified input[${i}] as "description" via metadata scan`);
+          logger.think(`Classified input[${i}] as "description" via metadata scan — confidence: MEDIUM`);
           fields.description = el;
         } else if (!fields.name && !fields.description && !fields.search) {
           const key = `unknown_${i}`;
-          logger.think(`Could not classify input[${i}]; storing as "${key}"`);
+          logger.warn(`[WARN] Using LOW-confidence fallback locator (positional input scan) — storing input[${i}] as "${key}"`);
           fields[key] = el;
         }
       }

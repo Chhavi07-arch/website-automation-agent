@@ -41,9 +41,11 @@ export class FillShadcnFormWorkflow {
 
     // 1. Declare the goal and its parameters.
     agent.think('Requesting action plan from Planner');
+    // NOTE: the shadcn "name" field is actually the *username* input (label
+    // "Username"), so we feed it a realistic username value, not a full name.
     const plan = agent.generatePlan(ACTION_TYPES.GOALS.FILL_SHADCN_FORM, {
       url:              config.target.url,
-      nameValue:        config.form.name,
+      nameValue:        config.form.username,
       descriptionValue: config.form.description,
     });
 
