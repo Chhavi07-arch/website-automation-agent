@@ -7,20 +7,20 @@
  *
  * Responsibilities:
  *   1. Initialise the Agent (launches browser, wires all components).
- *   2. Take a "browser launched" screenshot.
+ *   2. Capture before-task / after-task screenshots.
  *   3. Route to the workflow named by GOAL and run it.
- *   4. (Demo Mode) hold / keep the browser open for inspection.
+ *   4. (Demo Mode) keep the browser open for DEMO_PAUSE_MS — on success OR failure.
  *   5. Shut down cleanly (always, even on error).
  *
- * Demo Mode is fully opt-in: with the defaults (all OFF) behaviour is identical
- * to before — the browser closes immediately after the run.
+ * Demo Mode is fully opt-in (KEEP_BROWSER_OPEN / DEMO_PAUSE_MS). With the
+ * defaults (all OFF) the browser closes immediately after the run.
  */
 
 import readline from 'node:readline';
 import { Agent }                 from './agent/Agent.js';
 import { writeDiagnosticReport } from './utils/diagnostics.js';
 import { writeRunReport }        from './utils/report.js';
-import { sleep }                 from './utils/fileHelper.js';
+import { holdForInspection }     from './utils/demoMode.js';
 import { BlockedError }          from './utils/errors.js';
 import { ACTION_TYPES }          from './config/constants.js';
 import config                    from './config/env.js';
@@ -64,6 +64,10 @@ async function main() {
     logger.info(`Available goals: [${agent.router.listGoals().join(', ')}]`);
 
     workflow = agent.router.route(goalKey);
+
+    // --- Demo screenshot: state before the task runs ---
+    await agent.screenshot.capture('before-task');
+
     await workflow.run();
 
     // --- OUTCOME: SUCCESS ---
@@ -116,22 +120,25 @@ async function main() {
     let finalUrl = '';
     try { finalUrl = agent.navigation.currentUrl(); } catch { /* page may be gone */ }
 
-    // --- Demo Mode: let the examiner inspect the final state before teardown ---
-    if (config.demo.keepBrowserOpen && !config.browser.headless) {
-      logger.info('🖐  Browser left open for manual inspection.');
-      await waitForEnter('Press ENTER to close the browser and exit…');
-    } else if (config.demo.keepBrowserOpen && config.browser.headless) {
-      logger.warn('KEEP_BROWSER_OPEN ignored — browser is headless (nothing to inspect).');
-    } else if (config.demo.pauseMs > 0) {
-      logger.info(`⏸  Holding ${config.demo.pauseMs}ms so results stay visible…`);
-      await sleep(config.demo.pauseMs);
-    }
+    // --- Demo screenshot: final state after the task (success OR failure) ---
+    try { await agent.screenshot.capture('after-task'); } catch { /* best-effort */ }
+
+    // --- Demo Mode: keep the browser open for inspection (success OR failure) ---
+    // Gated entirely by KEEP_BROWSER_OPEN — disabled behaves exactly as before.
+    await holdForInspection({
+      keepBrowserOpen: config.demo.keepBrowserOpen,
+      pauseMs: config.demo.pauseMs,
+      headless: config.browser.headless,
+      waitForEnterFn: waitForEnter,
+    });
 
     await agent.shutdown();
 
     // --- Self-contained HTML run report (P3.5) ---
     if (config.report.enabled) {
-      const taskName = goalKey === ACTION_TYPES.GOALS.MULTI_STEP ? config.task.file : goalKey;
+      const taskName = goalKey === ACTION_TYPES.GOALS.MULTI_STEP ? config.task.file
+                     : goalKey === ACTION_TYPES.GOALS.AI_PLAN ? `AI: ${config.ai.goal}`
+                     : goalKey;
       writeRunReport({
         goal: goalKey,
         taskName,

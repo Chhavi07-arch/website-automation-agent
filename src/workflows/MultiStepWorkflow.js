@@ -24,6 +24,7 @@ import fs from 'fs';
 import path from 'path';
 import config from '../config/env.js';
 import logger from '../utils/logger.js';
+import { Planner } from '../agent/Planner.js';
 
 const TASKS_DIR = path.resolve('tasks');
 
@@ -140,6 +141,35 @@ export function validateTask(task) {
   return task;
 }
 
+/**
+ * Validate a task end-to-end for execution: structural schema PLUS action
+ * semantics (every action is supported and has its required params). The
+ * semantic check reuses the REAL translator (Planner.translateTaskStep) so
+ * there is a single source of truth — no separate allow-list to drift.
+ *
+ * Used to vet AI-generated tasks BEFORE execution. Throws on any problem.
+ *
+ * @param {any} task
+ * @returns {object} the validated task
+ */
+export function validateGeneratedTask(task) {
+  validateTask(task); // structure
+
+  const planner = new Planner(null); // translateTaskStep is pure — no agent needed
+  const walk = (steps) => {
+    steps.forEach((step, i) => {
+      if (step.if) {
+        walk(step.then);
+        if (Array.isArray(step.else)) walk(step.else);
+      } else {
+        planner.translateTaskStep(step, i); // throws on unsupported action / missing params
+      }
+    });
+  };
+  walk(task.steps);
+  return task;
+}
+
 // ---------------------------------------------------------------------------
 // Loading
 // ---------------------------------------------------------------------------
@@ -200,17 +230,30 @@ export class MultiStepWorkflow {
    * @returns {Promise<void>}
    */
   async run() {
-    const agent = this._agent;
     logger.info('--- MultiStepWorkflow starting ---');
-
     const task = loadTask(config.task.file);
-    agent.observe(`Loaded task "${task.name}" (${task.steps.length} steps) from ${config.task.file}`);
-    logger.plan(`=== Executing task: "${task.name}" ===`);
-
-    await this._runSteps(task.steps, task);
-
-    agent.verify(`Task "${task.name}" completed`);
+    this._agent.observe(`Loaded task "${task.name}" (${task.steps.length} steps) from ${config.task.file}`);
+    await this.runTask(task);
     logger.info('--- MultiStepWorkflow finished ---');
+  }
+
+  /**
+   * Execute an already-validated task OBJECT, whatever its source — a JSON file,
+   * the MockPlanner, or the OpenRouter planner. This is the single execution
+   * entry the AI planner reuses, so the executor never knows where the task came
+   * from. Variables are re-resolved defensively (a no-op for concrete values).
+   *
+   * @param {{name:string, steps:object[], vars?:object}} task
+   * @returns {Promise<void>}
+   */
+  async runTask(task) {
+    const agent = this._agent;
+    const ready = resolveVariables(validateTask(task), task.vars || {}, process.env);
+    logger.plan(`=== Executing task: "${ready.name}" (${ready.steps.length} steps) ===`);
+
+    await this._runSteps(ready.steps, ready);
+
+    agent.verify(`Task "${ready.name}" completed`);
   }
 
   /**

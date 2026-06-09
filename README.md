@@ -1,522 +1,217 @@
 # 🤖 Website Automation Agent
 
-> A modular, fault-tolerant browser automation **agent framework** built with Node.js and Playwright — inspired by [Browser Use](https://github.com/browser-use/browser-use).
-
-It is **not** a one-off Playwright script. It is a small agent framework that *observes* a page, *thinks* about what it sees, *acts*, and *verifies* — retrying and self-healing when the real web misbehaves.
+> A modular, fault-tolerant browser-automation **agent framework** (Node.js +
+> Playwright) — inspired by [Browser Use](https://github.com/browser-use/browser-use).
+> It detects page elements dynamically, plans actions as pure data, executes them
+> with retries and self-healing recovery, reports honest outcomes, and can turn a
+> **natural-language goal** into a runnable plan via an LLM — behind one stable engine.
 
 <p align="left">
   <img alt="Node" src="https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white">
   <img alt="Playwright" src="https://img.shields.io/badge/Playwright-1.44-2EAD33?logo=playwright&logoColor=white">
-  <img alt="Logging" src="https://img.shields.io/badge/Logging-Winston-231F20">
+  <img alt="AI" src="https://img.shields.io/badge/AI%20Planner-OpenRouter-7048e8">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-9%20suites%20%C2%B7%2049%20scenarios-1a7f37">
   <img alt="License" src="https://img.shields.io/badge/License-MIT-blue">
 </p>
 
 ---
 
-## 📑 Table of Contents
+## 📋 Overview
 
-- [Project Overview](#-project-overview)
-- [Motivation](#-motivation)
-- [Architecture](#-architecture)
-- [Features](#-features)
-- [Workflow Examples](#-workflow-examples)
-- [Folder Structure](#-folder-structure)
-- [Installation](#-installation)
-- [Configuration](#-configuration)
-- [Running Workflows](#-running-workflows)
-- [Testing](#-testing)
-- [Recovery Layer](#-recovery-layer)
-- [Diagnostics System](#-diagnostics-system)
-- [Screenshots](#-screenshots)
-- [Future Roadmap](#-future-roadmap)
-
----
-
-## 🔭 Project Overview
-
-The Website Automation Agent opens a browser, navigates to a target page, **dynamically detects** the elements it needs (using accessibility-first heuristics), performs actions, captures screenshots, logs every reasoning step, and **recovers from failures** instead of crashing.
-
-Every action follows an **Observe → Think → Act → Verify (OTAV)** loop, surfaced through a custom colour-coded logger so the agent's "reasoning" is visible in real time.
+This is **not** a one-off Playwright script. It is a small agent framework that
+follows an **Observe → Think → Act → Verify** loop, routes between goals, plans
+actions as serialisable data, and executes them through a single resilient engine:
 
 ```
-[OBSERVE] Page loaded — title: "React Hook Form - shadcn/ui"
-[THINK]   Found element via label: "name"
-[ACT]     Filling field with: "Jane Doe"
-[VERIFY]  Field value matches: "Jane Doe"
+[OBSERVE] Page loaded — title: "Search · GitHub"
+[THINK]   Found element via label: "search"  (confidence: HIGH)
+[ACT]     Filling field with: "playwright"
+[VERIFY]  URL contains expected fragment: "q=playwright"
+✅ OUTCOME: SUCCESS — workflow completed and verified.
 ```
 
----
+It also turns English into automation — `AI_GOAL="search github for playwright"` —
+where an LLM acts as a **planner only** (it emits task JSON; it never drives the
+browser), gated by a quality reviewer.
 
-## 💡 Motivation
-
-Most "automation projects" are a single brittle script with hardcoded CSS selectors that breaks the moment a page changes. This project was built to demonstrate the difference between **a script** and **an agent**:
-
-| A script | This agent |
-|----------|------------|
-| Hardcoded selectors | Accessibility-first dynamic detection (label → ARIA → placeholder → name → CSS) |
-| One task | Goal-routed, multi-workflow framework |
-| Crashes on first hiccup | Retries with backoff + self-healing recovery |
-| "It broke" | Structured diagnostic reports (screenshot + URL + failed action) |
-| Mixed what/how | Layered: Goal → Workflow → Planner → Executor → Tools |
-
-The goal: an **extensible foundation** that could later grow an AI reasoning layer — without rewriting the core.
+📚 **Docs:** [Project Overview](docs/PROJECT_OVERVIEW.md) ·
+[Architecture](docs/ARCHITECTURE.md) · [Test Report](docs/TEST_REPORT.md) ·
+[Viva Guide](docs/VIVA_GUIDE.md) · [Resume Bullets](docs/RESUME_BULLETS.md) ·
+[Final Audit](docs/FINAL_PROJECT_AUDIT.md)
 
 ---
 
 ## 🏗 Architecture
 
-### Core flow (V4)
-
 ```mermaid
 flowchart LR
-    A[Goal<br/>.env GOAL=] --> B[GoalRouter]
-    B --> C[Workflow]
-    C --> D[Planner]
-    D -->|action&#91;&#93; pure data| E[ActionExecutor]
-    E --> F[RetryService<br/>exp backoff]
-    F --> G[Recovery<br/>ladder]
-    G --> H[Tools]
-    H --> I[(Browser<br/>Playwright)]
-    E -.failure.-> J[Diagnostics<br/>logs/errors/*.json]
+    GOAL["GOAL / AI_GOAL"] --> RT[GoalRouter]
+    RT --> WF[Workflow]
+    WF --> PL[Planner]
+    PL -->|"action[] (pure data)"| EX[ActionExecutor]
+    EX --> RS[RetryService] --> RC[Recovery]
+    RC --> T[Tools] --> B[(Browser · Playwright)]
+    WF -. AI_PLAN .-> AIP[AI Planner + Reviewer] -. task JSON .-> WF
+    EX -. failure/blocked .-> D[Outcome + Diagnostics + HTML report]
 ```
 
-### Layered responsibilities
-
-```mermaid
-flowchart TD
-    subgraph Entry
-        IDX[index.js]
-    end
-    subgraph Agent
-        RT[GoalRouter]
-        PL[Planner]
-        EX[ActionExecutor]
-    end
-    subgraph Services
-        ED[ElementDetectionService]
-        FD[FormDetectionService]
-        VS[ValidationService]
-        RS[RetryService]
-    end
-    subgraph Tools
-        BM[BrowserManager]
-        NAV[NavigationTool]
-        CLK[ClickTool]
-        INP[InputTool]
-        SCR[ScrollTool]
-        SS[ScreenshotTool]
-    end
-    IDX --> RT --> WF[Workflow] --> PL --> EX
-    EX --> RS
-    EX --> ED & FD & VS
-    EX --> NAV & CLK & INP & SCR & SS
-    BM --> NAV
-```
-
-### Architecture evolution (V1 → V4)
-
-```mermaid
-flowchart TB
-    subgraph V1["V1 — Tool Framework"]
-        direction LR
-        V1W[Workflow] --> V1T[Tools] --> V1B[Browser]
-    end
-    subgraph V2["V2 — Planning Layer"]
-        direction LR
-        V2W[Workflow] --> V2P[Planner] --> V2E[Executor] --> V2T[Tools]
-    end
-    subgraph V3["V3 — Multi-Goal Routing"]
-        direction LR
-        V3G[GoalRouter] --> V3W[Workflow] --> V3P[Planner] --> V3E[Executor] --> V3T[Tools]
-    end
-    subgraph V4["V4 — Resilience"]
-        direction LR
-        V4G[GoalRouter] --> V4W[Workflow] --> V4P[Planner] --> V4E[Executor] --> V4R[Retry] --> V4RC[Recovery] --> V4T[Tools]
-    end
-    V1 --> V2 --> V3 --> V4
-```
-
-| Version | Theme | Key addition | Doc |
-|---------|-------|--------------|-----|
-| **V1** | Tool framework | OTAV loop, Winston logging, tools/services split | — |
-| **V2** | Planning layer | `Planner` emits pure-data action plans; field registry | [ARCHITECTURE_V2.md](docs/ARCHITECTURE_V2.md) |
-| **V3** | Multi-goal routing | `GoalRouter` registry; 3 workflows; switch via `.env` | [ARCHITECTURE_V3.md](docs/ARCHITECTURE_V3.md) |
-| **V4** | Resilience | `RetryService`, recovery ladder, Diagnostic Mode | [ARCHITECTURE_V4.md](docs/ARCHITECTURE_V4.md) |
-
-> **Design principle:** each version *extended* the architecture without rewriting working code. A new workflow is one import + one `.register()` call; an AI planner would be a single method swap.
+Layered (each layer depends only on the one below): **Tools → Services → Agent
+(GoalRouter / Planner / ActionExecutor) → Workflows**, with `planners/` (AI) and
+`benchmark/` (evaluation) alongside. Full design + diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
-## ✨ Features
+## ✨ Key features
 
-- **Observe → Think → Act → Verify** loop with a custom colour-coded Winston logger (`OBSERVE`/`THINK`/`ACT`/`VERIFY`/`PLAN`/`RECOVERY` levels).
-- **Accessibility-first element detection** — tries label → ARIA role → placeholder → name attribute → CSS, returning the first *visible* match.
-- **Goal-routed workflows** — pick the task with `GOAL=` in `.env`, no code changes.
-- **Multi-step engine** — run reusable tasks from JSON files (`GOAL=MULTI_STEP TASK_FILE=…`) with **no per-task code**; the same task format a future LLM planner would emit.
-- **Variable substitution** — `{{query}}` placeholders in task JSON resolve from env or a `vars` block; missing variables fail clearly.
-- **Conditional execution** — deterministic `{ "if": { "selector_exists": … }, "then": [...], "else": [...] }` and per-step `continueOnFailure` (no agent loop).
-- **Self-contained HTML run report** — `reports/report_<ts>.html` with steps, retries, recovery, screenshots, outcome, and final URL (no external deps).
-- **Pure-data action plans** — the `Planner` outputs serialisable `action[]`, logged in full *before* execution (AI-ready seam).
-- **Automatic retries** with exponential backoff (500 → 1000 → 2000 ms), configurable.
-- **Self-healing recovery ladder** for field detection (scroll & re-scan → full re-scan → diagnostic).
-- **Diagnostic Mode** — failures write a JSON report with screenshot, URL, page title, failed action, and timestamp.
-- **Strong, honest verification** — searches verify the query is in the URL **and** that results (or an empty-state) actually rendered, so a "success" can't be a false positive.
-- **Outcome classification** — every run ends as **SUCCESS / BLOCKED / FAILED** with a clear banner and distinct exit code (0 / 2 / 1).
-- **Anti-bot (blocked) detection** — CAPTCHA / consent / "unusual traffic" pages are reported as **BLOCKED**, never as a fake success or a generic crash.
-- **Detection confidence logging** — every match is tagged HIGH / MEDIUM / LOW so you can see the agent chose a real field, not an arbitrary one.
-- **Demo Mode** — `DEMO_MODE`, `DEMO_PAUSE_MS`, `KEEP_BROWSER_OPEN` keep the browser open and paced for live viva/recruiter demos.
-- **Timestamped screenshots** at every key step.
-- **Zero hardcoded brittle selectors** in the happy path.
+- **Accessibility-first detection** — label → ARIA → placeholder → name → CSS, first *visible* match; confidence logged HIGH/MEDIUM/LOW.
+- **Goal-routed workflows** — pick a task with `GOAL=` in `.env`; no code changes.
+- **Reusable JSON tasks** (`MULTI_STEP`) — variables (`{{q}}`), conditionals (`if/then/else`), `continueOnFailure` — add tasks with **no code**.
+- **AI planner** (`AI_PLAN`) — natural language → validated, reviewer-scored task JSON; planner-only; offline fallback.
+- **Resilience** — exponential-backoff retries, a self-healing detection recovery ladder, bounded navigation retries, tolerant waits/screenshots.
+- **Honest outcomes** — `SUCCESS` / `BLOCKED` (anti-bot) / `FAILED` with exit codes `0 / 2 / 1`, JSON diagnostics, and self-contained HTML run reports.
+- **Quality measurement** — a 20-goal **benchmark** + **49 deterministic tests** (no network/keys).
 
 ---
 
-## 🧩 Workflow Examples
-
-| Goal | What it does | Detection highlight |
-|------|--------------|---------------------|
-| `FILL_SHADCN_FORM` | Fills the shadcn React Hook Form demo (name + description) and verifies values | Accessible `<label>` matching |
-| `SEARCH_GOOGLE` | Searches Google; detects CAPTCHA/consent walls → **BLOCKED**; else verifies `q=<query>` + results rendered | ARIA searchbox / `name="q"` |
-| `SEARCH_GITHUB` | Searches GitHub via `/search`; verifies `q=<query>` in the URL **and** that results rendered | Visible-input filtering past hidden header button |
-| `MULTI_STEP` | Runs **any** reusable task from a JSON file (`TASK_FILE=…`) — no code per task | JSON `steps[]` → Planner → Executor |
-
-Example (shadcn) plan, logged before anything runs:
+## 🤖 AI planner workflow
 
 ```
-[PLAN] === Planning goal: "FILL_SHADCN_FORM" ===
-[PLAN] Plan contains 15 steps:
-[PLAN]   Step 01: Navigate → https://ui.shadcn.com/docs/forms/react-hook-form
-[PLAN]   Step 07: Detect field "name"
-[PLAN]   Step 10: Fill "name" → "Jane Doe"
-[PLAN]   Step 11: Verify "name" === "Jane Doe"
-...
+Natural-language goal → PlannerProvider → (OpenRouter | Mock) → task JSON
+                      → validate (schema + action allow-list)
+                      → TaskReviewer (score 0–100, must be ≥ 80)
+                      → MultiStepWorkflow.runTask → ActionExecutor → Browser
+```
+
+- **Safe:** invalid/unknown-action output is never executed (raw saved); low-quality plans (< 80) are saved to a review report and skipped.
+- **Resilient:** OpenRouter timeout / 429 / auth → automatic fallback to the offline `MockPlanner`.
+- **Decoupled:** the executor cannot tell whether a task came from a file, the Mock planner, or OpenRouter.
+
+```bash
+AI_GOAL="search github for browser automation" npm run ai     # mock (offline, no key)
+PLANNER_MODE=openrouter OPENROUTER_API_KEY=sk-or-... \
+  OPENROUTER_MODEL=openai/gpt-4.1-nano AI_GOAL="open the top hacker news story" npm run ai
 ```
 
 ---
 
-## 📂 Folder Structure
+## 📊 Benchmark workflow
+
+Measure planner quality objectively across 20 goals (`benchmark/goals.json`):
+
+```bash
+npm run benchmark                    # all 20 goals
+BENCHMARK_LIMIT=5 npm run benchmark  # first 5 only
+```
+
+Each goal runs **plan → review → execute**; outputs `reports/benchmark_report.{json,html}`
+with **planning success rate · review approval rate · execution success rate ·
+average review score · average execution time**.
+
+---
+
+## 🚀 Quick start
+
+```bash
+git clone <your-repo-url> && cd WebsiteAutomation
+npm install                 # postinstall fetches Chromium
+cp .env.example .env        # then run any demo below
+npm run github              # ✅ SUCCESS on a live GitHub search
+```
+
+### Installation
+- **Prerequisite:** Node.js 18+.
+- `npm install` installs deps and (via `postinstall`) the Chromium binary.
+- If the browser didn't download: `npx playwright install chromium`.
+- Copy `.env.example` → `.env`. All config is documented there.
+
+---
+
+## ▶ Demo commands
+
+```bash
+npm start            # runs the goal in .env (default: FILL_SHADCN_FORM)
+npm run shadcn       # FILL_SHADCN_FORM — fill a real form, verified
+npm run google       # SEARCH_GOOGLE   — may report BLOCKED (CAPTCHA) — by design
+npm run github       # SEARCH_GITHUB   — verifies q=<query> + results rendered
+npm run task         # MULTI_STEP      — run a JSON task (TASK_FILE=…)
+npm run ai           # AI_PLAN         — AI_GOAL="…" → planner → run
+
+# Reusable JSON tasks (no code):
+TASK_FILE=wikipedia_search.json  npm run task   # variables + continueOnFailure
+TASK_FILE=stackoverflow_search.json npm run task # conditional if/then/else
+```
+
+**Demo Mode** (keep the browser open for a viewer):
+```bash
+KEEP_BROWSER_OPEN=true DEMO_PAUSE_MS=15000 npm run github
+```
+`KEEP_BROWSER_OPEN=true` holds the browser open (success *and* failure) for
+`DEMO_PAUSE_MS`; logs `[DEMO] Keeping browser open for inspection`. Disabled by
+default — normal runs close immediately.
+
+---
+
+## 📸 Screenshots
+
+Every run captures timestamped PNGs to `screenshots/` (git-ignored, regenerated):
+
+| Label | When |
+|-------|------|
+| `browser-launched` / `before-task` | start |
+| `*-results` / `*-query-typed` / domain-specific | mid-run evidence |
+| `after-task` | final state (success or failure) |
+| `detect-failed-*` / `diagnostic-failure` / `blocked-state` | on recovery/failure |
+
+A self-contained **HTML run report** (`reports/report_<ts>.html`) embeds the steps,
+retries, recovery events, screenshots, outcome, and final URL.
+
+---
+
+## 📂 Project structure
 
 ```
 WebsiteAutomation/
 ├── src/
-│   ├── agent/                    # Orchestration
-│   │   ├── Agent.js              #   composition root + OTAV log helpers
-│   │   ├── GoalRouter.js         #   goal key → workflow (registry pattern)
-│   │   ├── Planner.js            #   goal → pure-data action[]
-│   │   └── ActionExecutor.js     #   dispatch + retry + recovery ladder
-│   ├── workflows/                # Goal-oriented flows (incl. generic MultiStepWorkflow)
-│   │   ├── FillShadcnFormWorkflow.js
-│   │   ├── SearchGoogleWorkflow.js
-│   │   └── SearchGitHubWorkflow.js
-│   ├── services/                 # Reusable business logic
-│   │   ├── ElementDetectionService.js   # label > aria > placeholder > name > css
-│   │   ├── FormDetectionService.js      # scan & classify fields
-│   │   ├── ValidationService.js         # verify value/visible/enabled/URL/page
-│   │   └── RetryService.js              # exponential-backoff retry utility
-│   ├── tools/                    # Low-level Playwright wrappers
-│   │   ├── BrowserManager.js  NavigationTool.js  ScreenshotTool.js
-│   │   ├── InputTool.js       ClickTool.js       ScrollTool.js
-│   ├── utils/                    # Shared helpers
-│   │   ├── logger.js   fileHelper.js   diagnostics.js
-│   ├── config/                   # Configuration
-│   │   ├── env.js      constants.js
-│   └── index.js                  # Entry point
-├── tasks/                        # Reusable multi-step task definitions (JSON)
-│   ├── github_playwright.json  github_openai.json  shadcn_demo.json
-│   ├── wikipedia_search.json   hackernews_top.json  stackoverflow_search.json
-├── tests/                        # Deterministic suites (resilience, verification, multi-step, engine)
-├── docs/                         # Architecture, test reports, viva & demo guides
-├── reports/                      # Self-contained HTML run reports (generated)
-├── screenshots/                  # Timestamped run screenshots (generated)
-├── logs/                         # agent.log, errors.log, errors/*.json (generated)
-├── .env.example                  # Copy to .env
-└── README.md
+│   ├── agent/        GoalRouter · Planner · ActionExecutor · Agent
+│   ├── workflows/    FillShadcnForm · SearchGoogle · SearchGitHub · MultiStep · AiPlanner
+│   ├── planners/     PlannerProvider · OpenRouterPlanner · MockPlanner · TaskReviewer
+│   ├── prompts/      versioned planner system prompt (JSON-only contract)
+│   ├── services/     ElementDetection · FormDetection · Validation · RetryService
+│   ├── tools/        BrowserManager · Navigation · Click · Input · Scroll · Screenshot
+│   ├── benchmark/    BenchmarkRunner · run.mjs
+│   ├── utils/        logger · diagnostics · report · demoMode · fileHelper · errors
+│   ├── config/       env.js · constants.js
+│   └── index.js      entry: route → run → outcome → demo → report
+├── tasks/            reusable task JSON (+ generated/, git-ignored)
+├── benchmark/        goals.json (20 NL goals)
+├── tests/            9 deterministic suites
+├── docs/             overview · architecture · test report · viva · resume · audit
+├── screenshots/  reports/  logs/   (generated, git-ignored)
+└── .env.example  package.json  README.md
 ```
-
----
-
-## 🛠 Installation
-
-**Prerequisites:** Node.js 18+.
-
-```bash
-# 1. Clone
-git clone <your-repo-url>
-cd WebsiteAutomation
-
-# 2. Install dependencies (postinstall fetches the Chromium binary automatically)
-npm install
-
-# If the browser binary did not download automatically:
-npx playwright install chromium
-```
-
----
-
-## ⚙ Configuration
-
-All configuration lives in `.env` (loaded via `dotenv`, validated in `src/config/env.js`). Copy the template and edit:
-
-```bash
-cp .env.example .env
-```
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `GOAL` | `FILL_SHADCN_FORM` | Which workflow to run |
-| `HEADLESS` | `false` | Hide the browser window |
-| `SLOW_MO` | `50` | Per-action delay (ms) for readable demos |
-| `BROWSER_LOCALE` | `en-US` | UI locale (realistic locale reduces anti-bot walls) |
-| `BROWSER_UA` | desktop Chrome UA | User-Agent; set empty to use Playwright's default |
-| `PAGE_LOAD_TIMEOUT` | `30000` | Navigation timeout (ms) |
-| `ELEMENT_TIMEOUT` | `10000` | Per-element wait (ms) |
-| `USERNAME` | `chhavi_ahlawat` | Value for the shadcn **username** field (the "name" field is really a username) |
-| `FORM_DESCRIPTION` | student bio | Value for the shadcn description textarea |
-| `GOOGLE_QUERY` / `GITHUB_QUERY` | — | Search queries |
-| `TASK_FILE` | `github_playwright.json` | Task file (under `tasks/`) for `GOAL=MULTI_STEP` |
-| `REPORT` | `true` | Write a self-contained HTML run report to `reports/` |
-| `<VAR>` (e.g. `QUERY`) | — | Any task `{{token}}` resolves from env (`TOKEN`) or the task `vars` block |
-| `RETRY_COUNT` | `3` | Max attempts for retryable actions |
-| `NAV_RETRY_COUNT` | `2` | Max NAVIGATE attempts (bounded) |
-| `RETRY_BASE_DELAY_MS` | `500` | First backoff; doubles each attempt |
-| `LOG_LEVEL` | `info` | Logger verbosity |
-| `DEMO_MODE` | `false` | Slow actions slightly + clear banners |
-| `DEMO_PAUSE_MS` | `0` | Hold N ms before closing so results stay visible |
-| `KEEP_BROWSER_OPEN` | `false` | Leave the browser open until you press Enter |
-
----
-
-## ▶ Running Workflows
-
-```bash
-npm start            # runs the goal set in .env (default: FILL_SHADCN_FORM)
-
-# Convenience scripts (override the goal without editing .env):
-npm run shadcn       # FILL_SHADCN_FORM
-npm run google       # SEARCH_GOOGLE
-npm run github       # SEARCH_GITHUB
-npm run task         # MULTI_STEP (uses TASK_FILE, default github_playwright.json)
-```
-
-Or set the goal inline:
-
-```bash
-GOAL=SEARCH_GITHUB npm start
-```
-
-### 🧩 Multi-Step Tasks (run reusable JSON, no code)
-
-Execute any task definition in `tasks/` — no new workflow class needed:
-
-```bash
-TASK_FILE=github_playwright.json   npm run task
-TASK_FILE=shadcn_demo.json         npm run task
-TASK_FILE=wikipedia_search.json    npm run task   # variables + continueOnFailure
-TASK_FILE=hackernews_top.json      npm run task   # open first result
-TASK_FILE=stackoverflow_search.json npm run task  # conditional if/then/else
-```
-
-A task is plain data; the Planner translates its `steps[]` into executable actions:
-
-```json
-{
-  "name": "github_playwright",
-  "steps": [
-    { "action": "navigate", "url": "https://github.com/search" },
-    { "action": "search", "field": "search", "value": "playwright" },
-    { "action": "submit" },
-    { "action": "verify_url", "fragment": "q=playwright" },
-    { "action": "open_first_result", "selector": "[data-testid=\"results-list\"] a" },
-    { "action": "screenshot", "label": "repo" }
-  ]
-}
-```
-
-Supported verbs: `navigate`, `search`, `fill`, `click`, `submit`, `open_first_result`, `wait`, `wait_for_selector`, `verify_selector`, `verify_url`, `scroll`, `screenshot`. Details: [docs/ARCHITECTURE_V6.md](docs/ARCHITECTURE_V6.md).
-
-**Variables** — use `{{token}}` anywhere and supply values via env or a `vars` block (env wins):
-
-```json
-{ "name": "wiki", "vars": { "query": "Web scraping" },
-  "steps": [ { "action": "search", "field": "search", "value": "{{query}}" } ] }
-```
-```bash
-QUERY="Hypertext" TASK_FILE=wikipedia_search.json npm run task   # env overrides the default
-```
-
-**Conditionals & tolerance** — deterministic branching (no agent loop):
-
-```json
-{ "if": { "selector_exists": ".s-post-summary" },
-  "then": [ { "action": "open_first_result", "selector": ".s-post-summary a" } ],
-  "else": [ { "action": "screenshot", "label": "no-results" } ] }
-```
-```json
-{ "action": "verify_selector", "selector": ".infobox", "continueOnFailure": true }
-```
-Conditions: `selector_exists`, `selector_missing`, `url_contains` (multiple keys are AND-ed).
-
-**Run report** — each run writes a self-contained `reports/report_<timestamp>.html` (open it in any browser). Disable with `REPORT=false`.
-
-### 🎬 Demo Mode (for viva / recruiter demos)
-
-Keep the browser open and paced so a viewer can confirm the result:
-
-```bash
-# Recommended combo — slows actions, holds, and waits for Enter before closing:
-DEMO_MODE=true DEMO_PAUSE_MS=5000 KEEP_BROWSER_OPEN=true npm run github
-```
-
-- `DEMO_MODE=true` — slows actions slightly and prints clear `🎬` banners.
-- `DEMO_PAUSE_MS=5000` — holds 5s before closing so results stay on screen.
-- `KEEP_BROWSER_OPEN=true` — leaves the browser open until you press **Enter** (`🖐  Browser left open for manual inspection.`).
-
-All three default to OFF, so normal runs are unchanged.
 
 ---
 
 ## 🧪 Testing
 
 ```bash
-npm test             # resilience + GitHub + Google + multi-step suites
+npm test     # 9 suites · 49 scenarios — deterministic, no network, no API key
 ```
 
-All suites drive the real `ActionExecutor` against controlled `data:` URL pages — deterministic, no live websites needed.
-
-**Resilience** (`tests/resilience.test.mjs`) — retry + recovery:
-
-| Scenario | Proves |
-|----------|--------|
-| **B — Broken selector** | Recovery ladder runs, then fails gracefully + diagnostic |
-| **D — Missing field** | Distinguishes "no form" vs "wrong field"; same resilient handling |
-| **E — Hidden initially** | **Self-heals** — waits via backoff, re-scans, finds late-rendered field |
-
-**Verification** (`tests/github-verification.test.mjs`) — proves a search "success" is real:
-
-| Scenario | Proves |
-|----------|--------|
-| **1 — Successful search** | results container present → passes |
-| **2 — Zero-result search** | empty-state present → passes (the search *did* run) |
-| **3 — Query in URL** | `q=playwright` present → passes |
-| **4 — Failed submission** | no `q=`, no results → **fails** (false positive removed) |
-
-**Google outcomes** (`tests/google-verification.test.mjs`) — SUCCESS / BLOCKED / FAILED classification:
-
-| Scenario | Proves |
-|----------|--------|
-| **1 — Successful search** | results + `q=` → SUCCESS |
-| **2 — Consent page** | consent wall → BLOCKED |
-| **3 — CAPTCHA page** | reCAPTCHA → BLOCKED |
-| **4 — Unusual traffic** | "unusual traffic" → BLOCKED |
-| **5 — Normal failure** | no results, not blocked → FAILED |
-
-**Multi-step engine** (`tests/multistep.test.mjs`) — valid execution, missing file, invalid schema, unsupported action, GitHub-like task (5 scenarios).
-
-**Engine hardening** (`tests/engine.test.mjs`) — variable substitution, missing-variable error, conditional then/else branches, continueOnFailure (5 scenarios).
-
-Full results: [V3](docs/TEST_REPORT_V3.md) (resilience) · [V4](docs/TEST_REPORT_V4.md) (P1) · [V5](docs/TEST_REPORT_V5.md) (P2 Google) · [V6](docs/TEST_REPORT_V6.md) (P3 multi-step) · [V7](docs/TEST_REPORT_V7.md) (P3.5 hardening).
+Suites: resilience · github-verification · google-verification · multi-step ·
+engine · planner · reviewer · demo · benchmark. They use controlled `data:` URL
+pages and injected fakes. Details + live-validation evidence: [docs/TEST_REPORT.md](docs/TEST_REPORT.md).
 
 ---
 
-## 🔁 Recovery Layer
+## 🔮 Future improvements
 
-When `DETECT_FIELD` fails, the agent doesn't give up — it escalates:
+- GitHub Actions CI (`npm test` headless, gated by exit codes).
+- URL allow-listing for AI-generated `navigate` steps.
+- Per-step retry overrides and richer task conditions.
+- *(Stretch)* vision-based detection fallback · self-correcting recovery · parallel contexts.
 
-```mermaid
-flowchart TD
-    A[Attempt 1: normal detection] -->|not found| B[Attempt 2:<br/>RECOVERY: scroll + re-scan DOM]
-    B -->|not found| C[Attempt 3:<br/>RECOVERY: force full re-scan]
-    C -->|not found| D[RECOVERY: capture diagnostic screenshot]
-    D --> E[Throw — tagged with failedAction]
-    A -->|found| OK[Continue]
-    B -->|found| OK
-    C -->|found| OK
-```
-
-Retries use **exponential backoff** between attempts (500 ms → 1000 ms). Navigation is retried a **bounded** number of times (never indefinitely). Verification actions (`VERIFY_URL`) retry to give slow pages time but never crash the workflow.
-
----
-
-## 🎯 Outcome Classification
-
-Every run ends as exactly one outcome — so a viewer can instantly tell *worked* vs *blocked by the site* vs *bug*, **by banner and exit code, without reading source**:
-
-| Outcome | Banner | Exit | When |
-|---------|--------|------|------|
-| **SUCCESS** | `✅ OUTCOME: SUCCESS` | `0` | task completed and verified |
-| **BLOCKED** | `🛑 OUTCOME: BLOCKED — anti-bot protection` | `2` | CAPTCHA / consent / "unusual traffic" |
-| **FAILED** | `❌ OUTCOME: FAILED` | `1` | navigation exhausted, field not found, bug |
-
-A CAPTCHA is reported as **BLOCKED** — never a fake SUCCESS, never a generic crash. The Google workflow runs a `CHECK_BLOCKED` step that throws a typed `BlockedError`; `index.js` classifies it. Full details: [docs/OUTCOMES.md](docs/OUTCOMES.md).
-
-```
-🛑 OUTCOME: BLOCKED — Workflow blocked by anti-bot protection.
-🛑 Reason: CAPTCHA
-```
-
----
-
-## 🩺 Diagnostics System
-
-When a workflow fails, Diagnostic Mode automatically writes `logs/errors/error_<YYYY-MM-DD>.json`:
-
-```json
-{
-  "goal": "SEARCH_GOOGLE",
-  "workflow": "SearchGoogleWorkflow",
-  "failedAction": "NAVIGATE",
-  "url": "https://www.google.com/",
-  "pageTitle": "Loading https://www.google.com/",
-  "timestamp": "2026-06-07T18:29:43.580Z",
-  "errorMessage": "page.goto: Timeout 1ms exceeded. …",
-  "screenshot": ".../screenshot_..._diagnostic-failure.png"
-}
-```
-
-This turns "it broke" into a dated, reproducible record — screenshot, URL, page title, the exact failed action, and the error message.
-
----
-
-## 📸 Screenshots
-
-Every run saves timestamped screenshots to `screenshots/` at each key step:
-
-| File label | Captured |
-|------------|----------|
-| `browser-launched` | Right after the browser opens |
-| `after-navigation` | After the target page loads |
-| `before-form-fill` / `*-query-typed` | Before submitting input |
-| `after-form-fill` / `*-results` | Final state |
-| `detect-failed-<field>` | Recovery diagnostic (on detection failure) |
-| `diagnostic-failure` | Workflow-level failure capture |
-
-> Screenshots are generated at runtime (the `screenshots/` folder is git-ignored). Run `npm start` to populate it.
-
----
-
-## 🚀 Future Roadmap
-
-See [docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md) for the full breakdown.
-
-- **Implemented:** OTAV loop · planning layer · goal routing · 3 workflows · retries · recovery · diagnostics
-- **Planned:** generic config-driven form filling · multi-page workflows · HTML run reports
-- **Stretch:** AI reasoning layer (LLM-generated plans) · screenshot-based element understanding · natural-language goals ("Open GitHub and search for Playwright")
-
----
-
-## 📚 More Documentation
-
-| Doc | Purpose |
-|-----|---------|
-| [docs/VIVA_GUIDE.md](docs/VIVA_GUIDE.md) | Demo walkthrough + viva Q&A |
-| [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | 3 / 5 / 10-minute presentation scripts |
-| [docs/RESUME_POINTS.md](docs/RESUME_POINTS.md) | Resume bullets + interview explanation |
-| [docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md) | Implemented / Planned / Stretch |
-| [docs/ARCHITECTURE_V2–V4.md](docs/) | Per-phase architecture deep dives |
-| [docs/ARCHITECTURE_V6.md](docs/ARCHITECTURE_V6.md) | Multi-step workflow engine (+ P3.5 hardening) |
-| [docs/MIGRATION_P3.md](docs/MIGRATION_P3.md) | P3 migration + future OpenAI seam |
-| [docs/TEST_REPORT_V2–V7.md](docs/) | Test results |
-| [docs/OUTCOMES.md](docs/OUTCOMES.md) | SUCCESS / BLOCKED / FAILED classification |
-| [docs/INVESTIGATION_REPORT.md](docs/INVESTIGATION_REPORT.md) · [P2](docs/INVESTIGATION_REPORT_P2.md) | Demo-quality & Google reliability audits |
+Full list + technical debt: [docs/FINAL_PROJECT_AUDIT.md](docs/FINAL_PROJECT_AUDIT.md).
 
 ---
 
@@ -524,6 +219,4 @@ See [docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md) for the full breakdown.
 
 MIT — free to use, learn from, and extend.
 
----
-
-<sub>Built as a demonstration of agent design patterns, resilient browser automation, and clean layered architecture in Node.js.</sub>
+<sub>Built to demonstrate agent design patterns, resilient browser automation, safe LLM integration, and clean layered architecture in Node.js.</sub>

@@ -1,154 +1,155 @@
 # 🎓 Viva Guide — Website Automation Agent
 
-A complete preparation kit for demonstrating and defending this project in a viva / oral examination.
+A complete kit for demonstrating and defending the project. (Consolidates the
+earlier viva guide and demo script.)
 
 ---
 
-## 1. How to Demo the Project (5 minutes, live)
+## 1. Live demo (5 minutes)
 
-> Keep `HEADLESS=false` so the examiner can watch the browser.
+> Keep `HEADLESS=false` so the browser is visible. For a paced demo:
+> `KEEP_BROWSER_OPEN=true DEMO_PAUSE_MS=15000`.
 
-1. **Show the layered structure** — open `src/` and point out `agent/`, `workflows/`, `services/`, `tools/`. One sentence: *"Each layer only depends on the one below it."*
+1. **Show the layers** — `src/`: `tools/ → services/ → agent/ → workflows/`, plus
+   `planners/` and `benchmark/`. "Each layer depends only on the one below."
+2. **Run a workflow:** `npm run github` — narrate the `[PLAN]` block, then the
+   `OBSERVE/THINK/ACT/VERIFY` loop; it verifies `q=playwright` **and** results.
+3. **Switch goals via config:** `npm run shadcn` — same engine, different goal.
+4. **AI planning:** `AI_GOAL="search wikipedia for alan turing" npm run ai` — English
+   → task JSON → `[REVIEW] approved 100/100` → executes.
+5. **Resilience:** `npm test` — point to `[RETRY]` backoff and bold-red `[RECOVERY]`;
+   Scenario E *self-heals* on a late-rendered field.
+6. **Honest failure:** `GOAL=SEARCH_GOOGLE npm start` → `🛑 OUTCOME: BLOCKED` (CAPTCHA),
+   not a fake success or a crash.
+7. **Benchmark:** `BENCHMARK_LIMIT=4 npm run benchmark` → open `reports/benchmark_report.html`.
 
-2. **Run the assignment workflow:**
-   ```bash
-   npm start            # FILL_SHADCN_FORM
-   ```
-   Narrate the colour-coded log as it runs: `[PLAN]` prints the whole plan first, then `[OBSERVE]/[THINK]/[ACT]/[VERIFY]` show the OTAV loop. The browser fills the name + description fields.
-
-3. **Switch goals without touching code:**
-   ```bash
-   npm run github       # SEARCH_GITHUB
-   ```
-   Point out: *"Only `.env` changed conceptually — the GoalRouter picked a different workflow."*
-
-4. **Show resilience (the highlight):**
-   ```bash
-   npm test             # deterministic retry/recovery scenarios
-   ```
-   Point to the `[RETRY]` backoff lines and the bold-red `[RECOVERY]` decisions. Emphasise **Scenario E** — the agent *recovers* and succeeds on a field that didn't exist yet.
-
-5. **Show a diagnostic report:**
-   ```bash
-   PAGE_LOAD_TIMEOUT=1 GOAL=SEARCH_GOOGLE npm start
-   cat logs/errors/error_*.json
-   ```
-   *"When it can't recover, it fails observably — screenshot, URL, failed action, timestamp."*
+**Best moment to land:** the BLOCKED outcome and the self-healing recovery — they
+separate an *agent* from a *script*.
 
 ---
 
-## 2. Key Architecture Decisions
+## 2. Architecture questions
+
+**Q: Is this just a Playwright script?**
+> No. A goal router selects a workflow, a planner produces a pure-data action plan,
+> an executor runs it with retries and self-healing recovery, and failures produce
+> structured diagnostics. It's layered and extensible to new tasks and to an AI planner.
+
+**Q: Walk me through one run.**
+> `index.js` initialises the Agent, reads `GOAL`, the `GoalRouter` picks the workflow,
+> the workflow asks the `Planner` for a logged `action[]`, the `ActionExecutor` runs
+> each action via tools (with retry/recovery), and the outcome is classified
+> SUCCESS/BLOCKED/FAILED with a screenshot, diagnostic JSON, and HTML report.
+
+**Q: Why separate Planner and Executor?**
+> The planner decides *what* (pure-data steps); the executor decides *how* (tool calls).
+> That seam means an LLM can emit the same plan format without touching the executor.
+
+**Q: How does element detection work / why first *visible*?**
+> Accessibility-first: label → ARIA → placeholder → name → CSS. It returns the first
+> **visible** match — a real bug fix: GitHub's homepage has a hidden header search
+> *button* sharing the "search" label; `.first()` matched it and clicks timed out.
+
+---
+
+## 3. AI planner questions
+
+**Q: Does the AI control the browser?**
+> No — the AI is **planner-only**. It emits task JSON and never touches Playwright,
+> the executor, or validation. The worst a bad model can do is produce JSON that
+> fails validation/review and is discarded.
+
+**Q: What stops a bad LLM plan from running?**
+> Two gates. (1) `validateGeneratedTask` — schema + an action allow-list reusing the
+> real translator. (2) `TaskReviewer` scores it 0–100; only ≥ 80 executes. Rejected
+> plans are saved to `reports/planner_review_<ts>.json` and skipped.
+
+**Q: What if OpenRouter is down / rate-limited?**
+> Transport errors (timeout / 429 / auth) → automatic fallback to the offline
+> `MockPlanner`, with a warning. Bad *output* is different — it's never executed.
+
+**Q: How is the model configured?**
+> `PLANNER_MODE` + `OPENROUTER_MODEL` in `.env`. Switching models is a config change;
+> no code edit. The system prompt is versioned in `src/prompts/`.
+
+---
+
+## 4. Recovery / resilience questions
+
+**Q: How do retries work?**
+> `RetryService` retries on throw with exponential backoff (500→1000→2000 ms). The
+> executor has a per-action policy; navigation retries are **bounded** (never infinite);
+> verifications retry but stay non-fatal.
+
+**Q: What's the difference between retry and recovery?**
+> Retry repeats the same action. Recovery *changes strategy* per attempt: for
+> `DETECT_FIELD` it goes normal → scroll + re-scan → force full re-scan → diagnostic.
+> Scenario E proves it heals a field that renders after a delay.
+
+**Q: What happens when a site blocks you?**
+> A `CHECK_BLOCKED` action detects CAPTCHA/consent/"unusual traffic" and throws a
+> typed `BlockedError`; the run ends as **BLOCKED** (exit 2) with a screenshot — not
+> a false success, not a generic crash.
+
+---
+
+## 5. Benchmark questions
+
+**Q: How do you measure planner quality?**
+> `npm run benchmark` runs 20 NL goals through plan → review → execute and reports
+> planning success rate, review-approval rate, execution success rate, average review
+> score, and average execution time (JSON + HTML).
+
+**Q: Is it just success/fail?**
+> No — five outcomes: SUCCESS / BLOCKED / FAILED / PLAN_REJECTED / PLAN_FAILED, so
+> "site blocked us" is distinct from "low-quality plan" and "bug".
+
+**Q: Does the benchmark change the engine?**
+> No — it's dependency-injected evaluation infrastructure reusing the real
+> planner/executor; it's unit-tested with fakes.
+
+---
+
+## 6. Design tradeoffs
 
 | Decision | Why |
 |----------|-----|
-| **Layered: Tools → Services → Agent → Workflows** | Separation of concerns; each layer is independently testable and replaceable. |
-| **Planner emits pure-data `action[]`** | Plans are inspectable, loggable, serialisable — and an LLM could generate them later with zero changes downstream. |
-| **GoalRouter registry (Map), not a switch** | Adding a workflow = one `.register()` call; no existing file changes. |
-| **Accessibility-first detection** | Labels/ARIA are far more stable than CSS paths; mirrors how a human reads a page. |
-| **Retry + recovery inside the Executor** | Reliability compounds across *all* workflows from one place. |
-| **Diagnostics to JSON** | Turns failures into reproducible, debuggable artifacts. |
-| **Config in `.env` via one validated module** | No magic numbers scattered in code; environment-tunable. |
+| Rule-based recovery, not AI | Deterministic, explainable; AI seam left for later |
+| AI = planner only | Tiny blast radius; executor stays the trusted runtime |
+| Pure-data plans | Inspectable, loggable, LLM-emittable; one stable executor |
+| Bounded navigation retries | Nav failures are usually real; don't loop forever |
+| Tolerant `networkidle` / screenshots | Many real pages never idle; evidence shouldn't crash a run |
+| Verifications non-fatal by default | A verify shouldn't fail a task that otherwise succeeded |
+| GitHub via `/search` URL | Homepage search is a dialog button, not a text input |
+| No TypeScript | Assignment specified JS; JSDoc gives types without a build step |
 
 ---
 
-## 3. Common Viva Questions & Strong Answers
+## 7. Scalability questions
 
-**Q: Is this just a Playwright script?**
-> No. A script hardcodes selectors and does one task. This is a framework: a goal router selects a workflow, a planner produces an action plan, an executor runs it with retries and self-healing recovery, and failures generate diagnostic reports. The OTAV loop and layered design make it extensible to new tasks and, eventually, an AI planner.
+**Q: How do you add a new task/site?**
+> Usually zero code — write a JSON task file and run `MULTI_STEP`. A new *goal type*
+> is one `GoalRouter.register()` call + a `Planner` method.
 
-**Q: Walk me through what happens when I run `npm start`.**
-> `index.js` initialises the `Agent` (launches the browser, wires tools/services/planner/router). It reads `GOAL` from `.env`, asks the `GoalRouter` for the matching workflow, and runs it. The workflow asks the `Planner` for a pure-data action plan, which is logged in full. The `ActionExecutor` then runs each action — resolving fields via the detection services, retrying on failure, and recovering when detection fails. Screenshots are captured throughout; on failure a diagnostic JSON is written.
+**Q: How would this scale to many runs / CI?**
+> Headless mode, deterministic exit codes (0/2/1) for CI gating, the benchmark for
+> regression tracking, and per-run HTML/JSON reports as artifacts. Browser contexts
+> are created per run in `BrowserManager`, so parallel contexts are a natural extension.
 
-**Q: How does element detection work?**
-> `ElementDetectionService` tries strategies in priority order — accessible label → ARIA role → placeholder → name attribute → CSS selector — and returns the first **visible** match. `FormDetectionService` uses it to scan a page and classify fields (name / description / search) using hint lists. This avoids brittle DOM-path selectors.
-
-**Q: Why return the first *visible* match?**
-> A real bug I hit: GitHub's homepage has a hidden `<button aria-label="Search…">` in the header that shares the "search" label with the real input. `.first()` matched the hidden button and the click timed out. `_firstVisible()` iterates matches and skips hidden ones — fixing it for every page with duplicate hidden/visible elements.
-
-**Q: How do retries work?** → see §6.
-**Q: How does recovery work?** → see §7.
-**Q: Difference between a workflow and the planner?** → see §8.
-
-**Q: What happens if an element is never found?**
-> The recovery ladder runs (scroll + re-scan, then full re-scan), each attempt spaced by exponential backoff. If still not found, the agent captures a `detect-failed-<field>` screenshot, tags the error with the failed action, and throws — which triggers Diagnostic Mode at the top level.
-
-**Q: How would you add a new task, e.g. "search Bing"?**
-> Three steps, no edits to existing workflows: (1) add `SEARCH_BING` to `ACTION_TYPES.GOALS`, (2) add a `_planSearchBing()` method to the Planner, (3) `.register()` it in `Agent.initialize()`. That's the whole point of the registry.
-
-**Q: How is logging structured?**
-> A Winston logger with custom levels mapping to the agent's mental states: `OBSERVE`, `THINK`, `ACT`, `VERIFY`, plus `PLAN` and `RECOVERY`. Console output is colour-coded; files store JSON. Errors also go to `logs/errors.log`.
-
-**Q: How did you test resilience without flaky websites?**
-> `data:` URL pages with known, controlled DOMs — one with no inputs, one with the wrong input, and one where a field is revealed by JS after a delay. This makes retry/recovery behaviour deterministic and repeatable.
+**Q: Biggest limitation?**
+> Anti-bot walls (Google/SO) block datacenter IPs — handled honestly as BLOCKED, but
+> not bypassed (by design). Detection is DOM/accessibility-based; a vision fallback
+> is a future option. See [FINAL_PROJECT_AUDIT.md](FINAL_PROJECT_AUDIT.md).
 
 ---
 
-## 4. Tradeoffs Made
+## 8. 30-second elevator pitch
 
-| Tradeoff | Rationale |
-|----------|-----------|
-| **Rule-based recovery, not AI** | Keeps the project deterministic and explainable; the AI seam is intentionally left for a future phase. |
-| **GitHub uses `/search` URL directly** | The homepage search is a dialog-opening button, not a text input; navigating to `/search` is more robust than fighting the dialog. |
-| **Verification (`VERIFY_URL`) is non-fatal** | A failed verify shouldn't crash a workflow that otherwise succeeded; it retries (to allow slow pages) then warns. |
-| **Bounded navigation retries (2)** | Navigation failures are usually real (bad URL / network); retrying indefinitely wastes time. |
-| **Single browser context** | Simpler lifecycle; multi-tab/multi-context deferred to the roadmap. |
-| **No TypeScript** | Assignment specified JavaScript; JSDoc provides type hints without a build step. |
-
----
-
-## 5. Why Playwright (vs Selenium / Puppeteer)?
-
-- **Auto-waiting** — Playwright waits for elements to be actionable by default, reducing flaky `sleep()` calls.
-- **First-class accessibility selectors** — `getByRole`, `getByLabel`, `getByPlaceholder` map directly to our accessibility-first detection strategy.
-- **Cross-browser** — chromium / firefox / webkit from one API (selectable via `BROWSER_TYPE`).
-- **Modern async API** — clean `async/await`, no callback hell.
-- **Reliable network helpers** — `waitForLoadState('networkidle')` for AJAX-heavy pages.
-- vs **Selenium**: lighter, faster, no separate WebDriver process. vs **Puppeteer**: cross-browser and richer locator API.
-
----
-
-## 6. How Retries Work
-
-- `RetryService.run(fn, {retries, baseDelay, label})` is a stateless utility. It calls `fn(attempt)`; if it **throws**, it waits `baseDelay * 2^(attempt-1)` and tries again.
-- Backoff schedule with defaults: **500 ms → 1000 ms → 2000 ms**.
-- The `ActionExecutor` holds a **retry policy** per action type:
-  - `CLICK / FILL / SEND_KEYS / PRESS_KEY / DETECT_FIELD` → retry, **fatal** on exhaustion.
-  - `VERIFY_URL` → retry, **non-fatal** (warns, never crashes).
-  - `NAVIGATE` → **bounded** retries (default 2 — never infinite).
-  - Everything else → run once.
-- All counts/delays are configurable via `.env`.
-
----
-
-## 7. How Recovery Works
-
-Recovery is **smarter than retry**: instead of repeating the same action, it changes strategy each attempt. For `DETECT_FIELD`:
-
-```
-Attempt 1 → normal detection (cached scan)
-Attempt 2 → [RECOVERY] scroll down + force a fresh DOM scan
-Attempt 3 → [RECOVERY] force another full DOM scan
-Exhausted → [RECOVERY] capture diagnostic screenshot, then fail
-```
-
-This is implemented by passing the **attempt number** into the retry callback and branching on it. Scenario E proves it heals: a field hidden until 1800 ms is found once the backoff waiting + re-scan push past the reveal time.
-
----
-
-## 8. Workflow vs Planner (the question examiners love)
-
-| | **Workflow** | **Planner** |
-|---|---|---|
-| Answers | *Which* goal + *what* parameters | *How* — the ordered steps |
-| Output | A call to the executor | A pure-data `action[]` array |
-| Knows about | One task's intent (URL, query, values) | How to translate a goal into navigate/detect/fill/verify steps |
-| Example | `SearchGoogleWorkflow` says "search Google for X" | `_planSearchGoogle()` emits `[NAVIGATE, DETECT_FIELD, FILL, PRESS_KEY, VERIFY_URL, …]` |
-| Size | ~10 lines (declarative) | The step logic |
-
-**One-liner:** *"The workflow declares the intent; the planner decides the steps; the executor performs them."* This separation is what lets a future AI planner replace `Planner.generatePlan()` without touching any workflow.
-
----
-
-## 9. 30-Second Elevator Pitch
-
-> "I built a modular browser automation **agent** in Node.js and Playwright. It dynamically detects page elements using accessibility-first heuristics, follows an Observe-Think-Act-Verify loop with full reasoning logs, and routes between multiple goal-driven workflows. The part I'm proudest of is the resilience layer — it retries with exponential backoff, *self-heals* by scrolling and re-scanning when an element isn't found yet, and writes structured diagnostic reports when it genuinely fails. The architecture is layered so a new task is one registration call, and an AI planner could drop in without rewriting anything."
+> "A modular browser-automation **agent** in Node.js + Playwright. It detects
+> elements by accessibility, follows an Observe-Think-Act-Verify loop, and routes
+> between goal-driven workflows. It retries with backoff, *self-heals* when an element
+> isn't ready, and reports honest outcomes — SUCCESS, BLOCKED-by-site, or FAILED —
+> with diagnostics and HTML reports. It even turns an English goal into a runnable
+> plan via an LLM that acts as a *planner only*, gated by a quality reviewer, and I
+> measure planner quality with a 20-goal benchmark. The architecture is layered so a
+> new task is just a JSON file."

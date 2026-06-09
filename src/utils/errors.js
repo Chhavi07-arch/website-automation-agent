@@ -26,3 +26,28 @@ export class BlockedError extends Error {
     this.blockedReason = blockedReason;
   }
 }
+
+/**
+ * Thrown when the AI planner's *transport* fails: timeout, rate limit (429),
+ * auth failure (401/403), or a network error. These are recoverable — the
+ * PlannerProvider falls back to the MockPlanner and continues.
+ */
+export class PlannerTransportError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'PlannerTransportError';
+  }
+}
+
+/**
+ * Thrown when the AI planner's *output* is unusable: unparseable JSON, invalid
+ * schema, unknown action, or missing required fields. These are NOT recovered
+ * — the run must not execute an invalid task. The raw response is saved for
+ * debugging before this is thrown.
+ */
+export class PlannerValidationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'PlannerValidationError';
+  }
+}

@@ -9,6 +9,7 @@
  */
 
 import { buildScreenshotPath } from '../utils/fileHelper.js';
+import config from '../config/env.js';
 import logger from '../utils/logger.js';
 
 export class ScreenshotTool {
@@ -20,22 +21,41 @@ export class ScreenshotTool {
   }
 
   /**
-   * Capture a full-page screenshot and save it to disk.
+   * Capture a screenshot and save it to disk.
+   *
+   * Tries a full-page capture first (bounded by a timeout). Very tall pages
+   * (e.g. a long Wikipedia article) can exceed Playwright's screenshot timeout
+   * "waiting for fonts to load", so on failure we fall back to a fast
+   * viewport-only capture. A screenshot is auxiliary evidence — if even that
+   * fails it is logged and skipped rather than failing the whole workflow.
    *
    * @param {string} label - Short human-readable label used in the filename.
-   * @returns {Promise<string>} - Absolute path to the saved screenshot.
+   * @returns {Promise<string>} - Absolute path to the (attempted) screenshot.
    */
   async capture(label = '') {
     const filePath = buildScreenshotPath(label);
+    const timeout = config.timeouts.element; // bounded; default 10s
     logger.act(`Taking screenshot: ${filePath}`);
 
-    await this._page.screenshot({
-      path: filePath,
-      fullPage: true,
-    });
+    // 1) Preferred: full-page.
+    try {
+      await this._page.screenshot({ path: filePath, fullPage: true, timeout });
+      logger.verify(`Screenshot saved — ${filePath}`);
+      return filePath;
+    } catch (err) {
+      logger.warn(`Full-page screenshot failed (${err.message.split('\n')[0]}) — falling back to viewport`);
+    }
 
-    logger.verify(`Screenshot saved — ${filePath}`);
-    return filePath;
+    // 2) Fallback: viewport-only (fast, reliable on huge pages).
+    try {
+      await this._page.screenshot({ path: filePath, fullPage: false, timeout });
+      logger.verify(`Screenshot saved (viewport) — ${filePath}`);
+      return filePath;
+    } catch (err) {
+      // 3) Best-effort: never let an auxiliary screenshot fail the run.
+      logger.warn(`Screenshot skipped (${err.message.split('\n')[0]}) — continuing`);
+      return filePath;
+    }
   }
 
   /**

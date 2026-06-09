@@ -14,6 +14,9 @@ screenshots/
 # HTML run reports generated during runs
 reports/
 
+# AI-generated task files
+tasks/generated/
+
 # OS files
 .DS_Store
 Thumbs.db

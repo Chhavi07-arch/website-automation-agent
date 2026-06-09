@@ -1,0 +1,25 @@
+{
+  "description": "Benchmark goals for the AI planner — 20 natural-language goals across 5 categories.",
+  "goals": [
+    { "id": 1,  "category": "github",        "goal": "search github for playwright" },
+    { "id": 2,  "category": "wikipedia",     "goal": "search wikipedia for alan turing" },
+    { "id": 3,  "category": "hackernews",    "goal": "open the top hacker news story" },
+    { "id": 4,  "category": "github",        "goal": "find react testing libraries on github" },
+    { "id": 5,  "category": "wikipedia",     "goal": "look up quantum computing on wikipedia" },
+    { "id": 6,  "category": "github",        "goal": "search github for browser automation" },
+    { "id": 7,  "category": "stackoverflow", "goal": "search stack overflow for python decorators" },
+    { "id": 8,  "category": "wikipedia",     "goal": "find the wikipedia article about the eiffel tower" },
+    { "id": 9,  "category": "github",        "goal": "look up langchain on github" },
+    { "id": 10, "category": "hackernews",    "goal": "open the first story on hacker news" },
+    { "id": 11, "category": "stackoverflow", "goal": "find questions about javascript promises on stack overflow" },
+    { "id": 12, "category": "wikipedia",     "goal": "search wikipedia for machine learning" },
+    { "id": 13, "category": "github",        "goal": "search github for the openai node sdk" },
+    { "id": 14, "category": "stackoverflow", "goal": "search stack overflow for async await" },
+    { "id": 15, "category": "docs",          "goal": "search the mdn web docs for the fetch api" },
+    { "id": 16, "category": "wikipedia",     "goal": "look up ada lovelace on wikipedia" },
+    { "id": 17, "category": "hackernews",    "goal": "show the top post on hacker news" },
+    { "id": 18, "category": "stackoverflow", "goal": "look up regular expressions on stack overflow" },
+    { "id": 19, "category": "docs",          "goal": "find the playwright documentation for locators" },
+    { "id": 20, "category": "docs",          "goal": "open the node.js documentation home page" }
+  ]
+}

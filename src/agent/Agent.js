@@ -40,6 +40,7 @@ import { FillShadcnFormWorkflow }  from '../workflows/FillShadcnFormWorkflow.js'
 import { SearchGoogleWorkflow }    from '../workflows/SearchGoogleWorkflow.js';
 import { SearchGitHubWorkflow }    from '../workflows/SearchGitHubWorkflow.js';
 import { MultiStepWorkflow }       from '../workflows/MultiStepWorkflow.js';
+import { AiPlannerWorkflow }       from '../workflows/AiPlannerWorkflow.js';
 import { ACTION_TYPES }            from '../config/constants.js';
 import logger                      from '../utils/logger.js';
 
@@ -109,7 +110,8 @@ export class Agent {
       .register(ACTION_TYPES.GOALS.FILL_SHADCN_FORM, FillShadcnFormWorkflow)
       .register(ACTION_TYPES.GOALS.SEARCH_GOOGLE,    SearchGoogleWorkflow)
       .register(ACTION_TYPES.GOALS.SEARCH_GITHUB,    SearchGitHubWorkflow)
-      .register(ACTION_TYPES.GOALS.MULTI_STEP,       MultiStepWorkflow);
+      .register(ACTION_TYPES.GOALS.MULTI_STEP,       MultiStepWorkflow)
+      .register(ACTION_TYPES.GOALS.AI_PLAN,          AiPlannerWorkflow);
 
     logger.info(
       `Agent ready — router knows ${this.router.listGoals().length} goals: ` +

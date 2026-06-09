@@ -136,10 +136,27 @@ const config = {
   demo: {
     /** Master demo switch — slows actions slightly and prints clear banners. */
     enabled: parseBool(process.env.DEMO_MODE, false),
-    /** If > 0, pause this many ms before finishing so results stay on screen. */
-    pauseMs: parseInt_(process.env.DEMO_PAUSE_MS, 0),
-    /** If true, do NOT auto-close the browser — wait for the user to press Enter. */
+    /**
+     * How long to keep the browser open for inspection (ms) when Demo Mode is on.
+     * Only takes effect when KEEP_BROWSER_OPEN=true, so the default is harmless
+     * for normal runs. 0 + keep-open + headed → wait for Enter instead.
+     */
+    pauseMs: parseInt_(process.env.DEMO_PAUSE_MS, 15000),
+    /** Demo Mode switch: keep the browser open after the run (success OR failure). */
     keepBrowserOpen: parseBool(process.env.KEEP_BROWSER_OPEN, false),
+  },
+
+  ai: {
+    /** Which planner converts natural language → task JSON: mock | openrouter */
+    plannerMode: process.env.PLANNER_MODE || 'mock',
+    /** Natural-language goal for GOAL=AI_PLAN runs (e.g. "search github for playwright"). */
+    goal: process.env.AI_GOAL || '',
+    openrouter: {
+      apiKey:    process.env.OPENROUTER_API_KEY || '',
+      model:     process.env.OPENROUTER_MODEL || 'qwen/qwen3-next-80b-a3b-instruct:free',
+      baseUrl:   process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+      timeoutMs: parseInt_(process.env.OPENROUTER_TIMEOUT_MS, 30000),
+    },
   },
 };
 

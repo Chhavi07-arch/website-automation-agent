@@ -7,11 +7,13 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node tests/resilience.test.mjs && node tests/github-verification.test.mjs && node tests/google-verification.test.mjs && node tests/multistep.test.mjs && node tests/engine.test.mjs",
+    "test": "node tests/resilience.test.mjs && node tests/github-verification.test.mjs && node tests/google-verification.test.mjs && node tests/multistep.test.mjs && node tests/engine.test.mjs && node tests/planner.test.mjs && node tests/reviewer.test.mjs && node tests/demo.test.mjs && node tests/benchmark.test.mjs",
     "shadcn": "cross-env GOAL=FILL_SHADCN_FORM node src/index.js",
     "google": "cross-env GOAL=SEARCH_GOOGLE node src/index.js",
     "github": "cross-env GOAL=SEARCH_GITHUB node src/index.js",
     "task": "cross-env GOAL=MULTI_STEP node src/index.js",
+    "ai": "cross-env GOAL=AI_PLAN node src/index.js",
+    "benchmark": "node src/benchmark/run.mjs",
     "postinstall": "playwright install chromium"
   },
   "dependencies": {

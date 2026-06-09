@@ -117,6 +117,7 @@ export const ACTION_TYPES = {
     SEARCH_GOOGLE:    'SEARCH_GOOGLE',      // navigate to Google and search for a query
     SEARCH_GITHUB:    'SEARCH_GITHUB',      // navigate to GitHub and search for a query
     MULTI_STEP:       'MULTI_STEP',         // execute a reusable task definition from a JSON file
+    AI_PLAN:          'AI_PLAN',            // turn a natural-language goal into a task, then run it
   },
 };
 
@@ -127,3 +128,12 @@ export const ACTION_TYPES = {
  */
 export const DEFAULT_RESULT_LINK_SELECTOR =
   '[data-testid="results-list"] a, #search a, #rso a, #links a, main a[href]';
+
+/**
+ * Task-JSON verbs the engine understands. Keep in sync with
+ * Planner.translateTaskStep — used by TaskReviewer to flag unknown actions.
+ */
+export const SUPPORTED_TASK_ACTIONS = [
+  'navigate', 'search', 'fill', 'click', 'submit', 'open_first_result',
+  'wait', 'wait_for_selector', 'verify_selector', 'verify_url', 'scroll', 'screenshot',
+];
